@@ -1,0 +1,51 @@
+
+<section class="auth-page">
+  <div class="auth-card">
+    <div class="brand">Finance Manager</div>
+    <h1>Welcome back</h1>
+    <p class="subtitle">Sign in to manage your financial accounts.</p>
+
+    <form [formGroup]="form" (ngSubmit)="submit()">
+      <div class="field">
+        <label for="email">Email address</label>
+        <input
+          id="email"
+          type="email"
+          autocomplete="username"
+          formControlName="email"
+          placeholder="you@example.com"
+        />
+        @if (form.controls.email.touched && form.controls.email.invalid) {
+          <small class="error">Enter a valid email address.</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input
+          id="password"
+          type="password"
+          autocomplete="current-password"
+          formControlName="password"
+          placeholder="Enter your password"
+        />
+        @if (form.controls.password.touched && form.controls.password.invalid) {
+          <small class="error">Password is required.</small>
+        }
+      </div>
+
+      @if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
+      }
+
+      <button type="submit" [disabled]="submitting() || form.invalid">
+        {{ submitting() ? 'Signing in...' : 'Sign In' }}
+      </button>
+    </form>
+
+    <p class="footer">
+      Don't have an account?
+      <a routerLink="/register">Create an account</a>
+    </p>
+  </div>
+</section>

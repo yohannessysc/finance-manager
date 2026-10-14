@@ -1,0 +1,173 @@
+<section class="accounts-page">
+  <!-- Page Header -->
+  <header class="page-header">
+    <div>
+      <h1>Financial Accounts</h1>
+      <p>Manage and monitor your financial accounts.</p>
+    </div>
+
+    <div class="header-actions">
+      <button type="button" class="secondary" [disabled]="loading()" (click)="loadAccounts()">
+        {{ loading() ? 'Refreshing...' : 'Refresh' }}
+      </button>
+
+      <button type="button" class="primary" [disabled]="saving()" (click)="toggleForm()">
+        {{ showForm() ? 'Cancel' : '+ Add Account' }}
+      </button>
+
+      <button type="button" class="logout-button" [disabled]="loggingOut()" (click)="logout()">
+        {{ loggingOut() ? 'Logging out...' : 'Logout' }}
+      </button>
+    </div>
+  </header>
+
+  <!-- Success Message -->
+  @if (successMessage()) {
+    <div class="success-message" role="status">
+      {{ successMessage() }}
+    </div>
+  }
+
+  <!-- Create / Edit Account Form -->
+  @if (showForm()) {
+    <form class="account-form" [formGroup]="accountForm" (ngSubmit)="saveAccount()">
+      <h2>
+        {{ editingAccountId() ? 'Edit Financial Account' : 'Create Financial Account' }}
+      </h2>
+
+      <!-- Account Name -->
+      <div class="form-field">
+        <label for="accountName"> Account Name </label>
+
+        <input
+          id="accountName"
+          type="text"
+          formControlName="name"
+          placeholder="e.g. Emergency Savings"
+          maxlength="150"
+        />
+
+        @if (accountForm.controls.name.touched && accountForm.controls.name.invalid) {
+          <small class="error"> Account name is required (maximum 150 characters). </small>
+        }
+      </div>
+
+      <!-- Account Type -->
+      <div class="form-field">
+        <label for="accountType"> Account Type </label>
+
+        <select id="accountType" formControlName="accountType">
+          @for (type of accountTypes; track type) {
+            <option [value]="type">
+              {{ type }}
+            </option>
+          }
+        </select>
+      </div>
+
+      <!-- Opening Balance -->
+      <div class="form-field">
+        <label for="openingBalance"> Opening Balance (CAD) </label>
+
+        <input id="openingBalance" type="number" step="0.01" formControlName="openingBalance" />
+
+        <small> Enter the starting balance for this account. </small>
+      </div>
+
+      <!-- Validation / API Error -->
+      @if (formError()) {
+        <p class="error" role="alert">
+          {{ formError() }}
+        </p>
+      }
+
+      <!-- Form Actions -->
+      <div class="form-actions">
+        <button type="button" class="secondary" [disabled]="saving()" (click)="cancelForm()">
+          Cancel
+        </button>
+
+        <button type="submit" class="primary" [disabled]="saving()">
+          @if (saving()) {
+            Saving...
+          } @else if (editingAccountId()) {
+            Update Account
+          } @else {
+            Save Account
+          }
+        </button>
+      </div>
+    </form>
+  }
+
+  <!-- API Error -->
+  @if (error()) {
+    <div class="error" role="alert">
+      {{ error() }}
+
+      <button type="button" class="secondary" (click)="loadAccounts()">Try Again</button>
+    </div>
+  }
+
+  <!-- Loading -->
+  @if (loading()) {
+    <p class="loading-message">Loading your accounts...</p>
+  } @else if (accounts().length === 0 && !error()) {
+    <!-- Empty State -->
+    <div class="empty-state">
+      <h2>No Financial Accounts</h2>
+
+      <p>You haven't added any financial accounts yet. Create your first account to get started.</p>
+
+      <button type="button" class="primary" (click)="toggleForm()">Add Your First Account</button>
+    </div>
+  } @else {
+    <!-- Accounts Grid -->
+    <div class="account-grid">
+      @for (account of accounts(); track account.id) {
+        <article class="account-card">
+          <!-- Account Header -->
+          <div class="account-card-header">
+            <h2>
+              {{ account.name }}
+            </h2>
+
+            <span class="account-type">
+              {{ account.accountType }}
+            </span>
+          </div>
+
+          <!-- Account Balance -->
+          <p class="balance-label">Opening Balance</p>
+
+          <strong class="balance">
+            {{ account.openingBalance | currency: account.currency }}
+          </strong>
+
+          <p class="currency-label">Currency: {{ account.currency }}</p>
+
+          <!-- Account Actions -->
+          <div class="account-actions">
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="saving() || !!deletingAccountId()"
+              (click)="startEdit(account)"
+            >
+              Edit
+            </button>
+
+            <button
+              type="button"
+              class="delete-button"
+              [disabled]="saving() || !!deletingAccountId()"
+              (click)="deleteAccount(account)"
+            >
+              {{ deletingAccountId() === account.id ? 'Deleting...' : 'Delete' }}
+            </button>
+          </div>
+        </article>
+      }
+    </div>
+  }
+</section>

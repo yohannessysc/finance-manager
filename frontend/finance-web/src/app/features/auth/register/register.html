@@ -1,0 +1,76 @@
+
+<section class="auth-page">
+  <div class="auth-card">
+    <div class="brand">Finance Manager</div>
+    <h1>Create your account</h1>
+    <p class="subtitle">
+      Start organizing your personal finances.
+    </p>
+
+    <form [formGroup]="form" (ngSubmit)="submit()">
+      <div class="field">
+        <label for="firstName">First name</label>
+        <input
+          id="firstName"
+          type="text"
+          autocomplete="given-name"
+          formControlName="firstName"
+        />
+      </div>
+
+      <div class="field">
+        <label for="lastName">Last name</label>
+        <input
+          id="lastName"
+          type="text"
+          autocomplete="family-name"
+          formControlName="lastName"
+        />
+      </div>
+
+      <div class="field">
+        <label for="registerEmail">Email address</label>
+        <input
+          id="registerEmail"
+          type="email"
+          autocomplete="email"
+          formControlName="email"
+        />
+        @if (form.controls.email.touched && form.controls.email.invalid) {
+          <small class="error">Enter a valid email address.</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="registerPassword">Password</label>
+        <input
+          id="registerPassword"
+          type="password"
+          autocomplete="new-password"
+          formControlName="password"
+        />
+        <small>
+          At least 12 characters, including uppercase, lowercase,
+          a number, and a symbol.
+        </small>
+      </div>
+
+      @if (form.invalid && form.touched) {
+        <p class="error">Please complete all required fields correctly.</p>
+      }
+
+      @if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
+      }
+
+      <button type="submit" [disabled]="submitting() || form.invalid">
+        {{ submitting() ? 'Creating account...' : 'Create Account' }}
+      </button>
+    </form>
+
+    <p class="footer">
+      Already have an account?
+      <a routerLink="/login">Sign in</a>
+    </p>
+  </div>
+</section>

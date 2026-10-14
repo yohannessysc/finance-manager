@@ -1,0 +1,34 @@
+# .NET build outputs
+**/bin/
+**/obj/
+**/TestResults/
+
+# Angular / Node
+**/node_modules/
+**/dist/
+**/.angular/
+**/coverage/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/secrets.json
+
+# Certificates and backups
+*.pfx
+*.p12
+*.pem
+*.key
+*.dump
+*.backup
+
+# Logs
+*.log

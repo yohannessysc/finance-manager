@@ -1,8 +1,11 @@
 
 using System.Security.Claims;
+
 using FinanceManager.Application.DTOs.Auth;
+using FinanceManager.Application.Services;
 using FinanceManager.Infrastructure.Identity;
 using FinanceManager.Api.Filters;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -15,13 +18,16 @@ public class AuthController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
+    private readonly DefaultCategorySeeder _defaultCategorySeeder;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
-        SignInManager<ApplicationUser> signInManager)
+        SignInManager<ApplicationUser> signInManager,
+        DefaultCategorySeeder defaultCategorySeeder)
     {
         _userManager = userManager;
         _signInManager = signInManager;
+        _defaultCategorySeeder = defaultCategorySeeder;
     }
 
     // POST /api/v1/auth/register
@@ -53,19 +59,29 @@ public class AuthController : ControllerBase
             Email = email
         };
 
+        // Create the user through ASP.NET Core Identity.
         var result = await _userManager.CreateAsync(
-            user, request.Password);
+            user,
+            request.Password);
 
         if (!result.Succeeded)
         {
             return BadRequest(new
             {
-                errors = result.Errors.Select(x => x.Description)
+                errors = result.Errors.Select(
+                    x => x.Description)
             });
         }
 
+        // Create default expense and income categories
+        // for the newly registered user.
+        await _defaultCategorySeeder.SeedForUserAsync(
+            user.Id,
+            HttpContext.RequestAborted);
+
         // Registration does not automatically authenticate.
-        return StatusCode(StatusCodes.Status201Created,
+        return StatusCode(
+            StatusCodes.Status201Created,
             new AuthUserResponse(
                 user.Id,
                 user.FirstName,
@@ -140,6 +156,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Logout()
     {
         await _signInManager.SignOutAsync();
+
         return NoContent();
     }
 }

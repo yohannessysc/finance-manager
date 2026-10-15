@@ -57,7 +57,167 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("FinancialAccounts");
+                    b.ToTable("FinancialAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.FinancialTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("DestinationAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FinancialAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Merchant")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("RecurringTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ScheduledOccurrenceUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("TransactionDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("DestinationAccountId");
+
+                    b.HasIndex("FinancialAccountId");
+
+                    b.HasIndex("RecurringTransactionId", "ScheduledOccurrenceUtc")
+                        .IsUnique()
+                        .HasFilter("\"RecurringTransactionId\" IS NOT NULL AND \"ScheduledOccurrenceUtc\" IS NOT NULL");
+
+                    b.HasIndex("UserId", "TransactionDateUtc");
+
+                    b.ToTable("FinancialTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.RecurringTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("DestinationAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("EndDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FinancialAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Frequency")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("NextOccurrenceUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("StartDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("Etc/UTC");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("DestinationAccountId");
+
+                    b.HasIndex("FinancialAccountId");
+
+                    b.HasIndex("UserId", "NextOccurrenceUtc");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("RecurringTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.TransactionCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("TransactionCategories", (string)null);
                 });
 
             modelBuilder.Entity("FinanceManager.Infrastructure.Identity.ApplicationUser", b =>
@@ -85,13 +245,11 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("FirstName")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("text");
 
                     b.Property<string>("LastName")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("text");
 
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
@@ -269,6 +427,70 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("FinanceManager.Domain.Entities.FinancialAccount", b =>
+                {
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.FinancialTransaction", b =>
+                {
+                    b.HasOne("FinanceManager.Domain.Entities.TransactionCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("FinanceManager.Domain.Entities.FinancialAccount", null)
+                        .WithMany()
+                        .HasForeignKey("DestinationAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("FinanceManager.Domain.Entities.FinancialAccount", null)
+                        .WithMany()
+                        .HasForeignKey("FinancialAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FinanceManager.Domain.Entities.RecurringTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("RecurringTransactionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.RecurringTransaction", b =>
+                {
+                    b.HasOne("FinanceManager.Domain.Entities.TransactionCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("FinanceManager.Domain.Entities.FinancialAccount", null)
+                        .WithMany()
+                        .HasForeignKey("DestinationAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("FinanceManager.Domain.Entities.FinancialAccount", null)
+                        .WithMany()
+                        .HasForeignKey("FinancialAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.TransactionCategory", b =>
                 {
                     b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()

@@ -1,10 +1,12 @@
 
 using FinanceManager.Application.Interfaces;
 using FinanceManager.Application.Services;
+using FinanceManager.Api.BackgroundServices;
 
 using FinanceManager.Infrastructure.Identity;
 using FinanceManager.Infrastructure.Persistence;
 using FinanceManager.Infrastructure.Repositories;
+using FinanceManager.Infrastructure.Services;
 
 using FinanceManager.Api.Filters;
 
@@ -130,6 +132,43 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     IFinancialAccountService,
     FinancialAccountService>();
+
+// Financial Transactions
+builder.Services.AddScoped<
+    IFinancialTransactionRepository,
+    FinancialTransactionRepository>();
+
+builder.Services.AddScoped<
+    IFinancialTransactionService,
+    FinancialTransactionService>();
+
+builder.Services.AddScoped<
+    IRecurringTransactionRepository,
+    RecurringTransactionRepository>();
+
+builder.Services.AddScoped<
+    IRecurringTransactionService,
+    RecurringTransactionService>();
+
+builder.Services.AddScoped<
+    IRecurringPostingService,
+    RecurringPostingService>();
+
+builder.Services.AddScoped<
+    ITransactionCategoryRepository,
+    TransactionCategoryRepository>();
+
+builder.Services.AddScoped<
+    ITransactionCategoryService,
+    TransactionCategoryService>();
+
+builder.Services.AddScoped<
+    IAccountBalanceService,
+    AccountBalanceService>();
+
+builder.Services.AddScoped<DefaultCategorySeeder>();
+
+builder.Services.AddHostedService<RecurringPostingBackgroundService>();
 
 // ---------------------------------------
 // 7. Authorization

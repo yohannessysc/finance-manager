@@ -1,0 +1,125 @@
+<div class="app-layout">
+  @if (mobileMenuOpen()) {
+    <button
+      class="mobile-backdrop"
+      type="button"
+      aria-label="Close navigation"
+      (click)="closeMenu()"
+    ></button>
+  }
+
+  <aside class="sidebar" [class.open]="mobileMenuOpen()">
+    <div class="brand">
+      <div class="brand-icon">F</div>
+      <div class="brand-copy">
+        <strong>Finance Manager</strong>
+        <span>Personal finance</span>
+      </div>
+    </div>
+
+    <div class="navigation-heading">WORKSPACE</div>
+
+    <nav class="navigation" aria-label="Main navigation">
+      <a routerLink="/dashboard" routerLinkActive="active" (click)="closeMenu()">
+        <span class="nav-icon">▦</span>
+        <span>Overview</span>
+      </a>
+
+      <a routerLink="/accounts" routerLinkActive="active" (click)="closeMenu()">
+        <span class="nav-icon">▣</span>
+        <span>Accounts</span>
+      </a>
+
+      <a routerLink="/transactions" routerLinkActive="active" (click)="closeMenu()">
+        <span class="nav-icon">⇄</span>
+        <span>Transactions</span>
+      </a>
+
+      <a routerLink="/recurring" routerLinkActive="active" (click)="closeMenu()">
+        <span class="nav-icon">◷</span>
+        <span>Recurring</span>
+      </a>
+
+      <a routerLink="/categories" routerLinkActive="active" (click)="closeMenu()">
+        <span class="nav-icon">▥</span>
+        <span>Categories</span>
+      </a>
+
+      <a routerLink="/settings" routerLinkActive="active" (click)="closeMenu()">
+        <span class="nav-icon">⚙</span>
+        <span>Settings</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="sidebar-note">
+        <span class="note-icon">✦</span>
+        <strong>Stay in control</strong>
+        <p>Track your money, understand your spending, and plan ahead.</p>
+      </div>
+
+      <div class="profile">
+        <div class="avatar">
+          {{ (auth.currentUser()?.email || 'U').charAt(0).toUpperCase() }}
+        </div>
+
+        <div class="profile-info">
+          <strong>My workspace</strong>
+          <span>{{ auth.currentUser()?.email }}</span>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-area">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button
+          type="button"
+          class="menu-button"
+          aria-label="Toggle navigation"
+          [attr.aria-expanded]="mobileMenuOpen()"
+          (click)="toggleMenu()"
+        >
+          ☰
+        </button>
+
+        <div class="breadcrumb">
+          <span>Workspace</span>
+          <span class="separator">/</span>
+          <strong>Finance Manager</strong>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <div class="theme-picker">
+          <label for="theme-select">Appearance</label>
+
+          <select
+            id="theme-select"
+            [value]="theme.preference()"
+            (change)="changeTheme($any($event.target).value)"
+          >
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="system">System</option>
+          </select>
+        </div>
+
+        <button class="logout-button" type="button" [disabled]="loggingOut()" (click)="logout()">
+          {{ loggingOut() ? 'Signing out...' : 'Sign out' }}
+        </button>
+      </div>
+    </header>
+
+    <main class="page-content">
+      @if (logoutError()) {
+        <div class="error-banner" role="alert">
+          {{ logoutError() }}
+        </div>
+      }
+
+      <router-outlet />
+    </main>
+  </div>
+</div>

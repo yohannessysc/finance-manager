@@ -4,6 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 import { FinancialAccount } from './financial-account.model';
+import { AccountBalance } from '../dashboard/dashboard.model';
 
 export interface CreateAccountRequest {
   name: string;
@@ -24,12 +25,16 @@ export class Accounts {
   private readonly http = inject(HttpClient);
   private readonly apiUrl = '/api/v1/accounts';
 
-  // GET - Retrieve accounts
   getAccounts(): Observable<FinancialAccount[]> {
     return this.http.get<FinancialAccount[]>(this.apiUrl);
   }
 
-  // POST - Create account
+  getBalances(): Observable<AccountBalance[]> {
+    return this.http.get<AccountBalance[]>(
+      '/api/v1/account-balances'
+    );
+  }
+
   createAccount(
     request: CreateAccountRequest
   ): Observable<FinancialAccount> {
@@ -39,7 +44,6 @@ export class Accounts {
     );
   }
 
-  // PUT - Update account
   updateAccount(
     id: string,
     request: UpdateAccountRequest
@@ -50,7 +54,6 @@ export class Accounts {
     );
   }
 
-  // DELETE - Delete account
   deleteAccount(id: string): Observable<void> {
     return this.http.delete<void>(
       `${this.apiUrl}/${id}`

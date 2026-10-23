@@ -33,6 +33,10 @@ public class FinanceDbContext
     public DbSet<TransactionCategory> TransactionCategories
         => Set<TransactionCategory>();
 
+    // Persistent per-account email cooldowns
+    public DbSet<EmailSendCooldown> EmailSendCooldowns
+        => Set<EmailSendCooldown>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -144,8 +148,6 @@ public class FinanceDbContext
             entity.Property(x => x.CreatedAtUtc)
                 .IsRequired();
 
-            // IANA time zone, for example America/Toronto.
-            // Existing schedules default to UTC.
             entity.Property(x => x.TimeZoneId)
                 .IsRequired()
                 .HasMaxLength(100)
@@ -251,6 +253,35 @@ public class FinanceDbContext
             .HasFilter(
                 "\"RecurringTransactionId\" IS NOT NULL " +
                 "AND \"ScheduledOccurrenceUtc\" IS NOT NULL");
+        });
+
+        // ==========================================
+        // EMAIL SEND COOLDOWNS
+        // ==========================================
+
+        modelBuilder.Entity<EmailSendCooldown>(entity =>
+        {
+            entity.ToTable("EmailSendCooldowns");
+
+            // One record per user and email purpose.
+            entity.HasKey(x => new
+            {
+                x.UserId,
+                x.Purpose
+            });
+
+            entity.Property(x => x.Purpose)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.Property(x => x.LastSentAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

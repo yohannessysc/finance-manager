@@ -8,6 +8,7 @@ import {
   switchMap,
   map,
   catchError,
+  finalize,
   of
 } from 'rxjs';
 
@@ -28,14 +29,12 @@ export class AuthService {
 
   private readonly apiUrl = '/api/v1/auth';
 
-  // Current authenticated user
   readonly currentUser = signal<AuthUser | null>(null);
-
   readonly loading = signal(false);
 
-  // -------------------------------
-  // Register
-  // -------------------------------
+  // ---------------------------------------
+  // Registration
+  // ---------------------------------------
   register(
     request: RegisterRequest
   ): Observable<AuthUser> {
@@ -45,9 +44,9 @@ export class AuthService {
     );
   }
 
-  // -------------------------------
+  // ---------------------------------------
   // Login
-  // -------------------------------
+  // ---------------------------------------
   login(
     request: LoginRequest
   ): Observable<AuthUser> {
@@ -67,9 +66,9 @@ export class AuthService {
     );
   }
 
-  // -------------------------------
-  // Current User
-  // -------------------------------
+  // ---------------------------------------
+  // Verify current session with the server
+  // ---------------------------------------
   getCurrentUser(): Observable<AuthUser | null> {
     this.loading.set(true);
 
@@ -78,19 +77,23 @@ export class AuthService {
     ).pipe(
       tap(user => {
         this.currentUser.set(user);
-        this.loading.set(false);
       }),
+      map(user => user as AuthUser | null),
       catchError(() => {
+        // Never continue treating a failed session
+        // check as proof that the user is logged in.
         this.currentUser.set(null);
-        this.loading.set(false);
         return of(null);
+      }),
+      finalize(() => {
+        this.loading.set(false);
       })
     );
   }
 
-  // -------------------------------
+  // ---------------------------------------
   // Logout
-  // -------------------------------
+  // ---------------------------------------
   logout(): Observable<void> {
     return this.http.post<void>(
       `${this.apiUrl}/logout`,
@@ -103,9 +106,54 @@ export class AuthService {
     );
   }
 
-  // -------------------------------
-  // Authentication State
-  // -------------------------------
+  // ---------------------------------------
+  // Email verification
+  // ---------------------------------------
+  confirmEmail(
+    email: string,
+    token: string
+  ): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(
+      `${this.apiUrl}/confirm-email`,
+      { email, token }
+    );
+  }
+
+  resendConfirmation(
+    email: string
+  ): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(
+      `${this.apiUrl}/resend-confirmation`,
+      { email }
+    );
+  }
+
+  // ---------------------------------------
+  // Password recovery
+  // ---------------------------------------
+  forgotPassword(
+    email: string
+  ): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(
+      `${this.apiUrl}/forgot-password`,
+      { email }
+    );
+  }
+
+  resetPassword(
+    email: string,
+    token: string,
+    newPassword: string
+  ): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(
+      `${this.apiUrl}/reset-password`,
+      { email, token, newPassword }
+    );
+  }
+
+  // ---------------------------------------
+  // Cached UI authentication state
+  // ---------------------------------------
   isAuthenticated(): boolean {
     return this.currentUser() !== null;
   }

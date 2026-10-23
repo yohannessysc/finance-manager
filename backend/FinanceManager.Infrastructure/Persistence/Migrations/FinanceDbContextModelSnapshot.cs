@@ -186,9 +186,7 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("FinancialAccountId");
 
-                    b.HasIndex("UserId", "NextOccurrenceUtc");
-
-                    b.HasIndex("UserId", "Status");
+                    b.HasIndex("UserId", "Status", "NextOccurrenceUtc");
 
                     b.ToTable("RecurringTransactions", (string)null);
                 });
@@ -215,7 +213,8 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "Type", "Name")
+                        .IsUnique();
 
                     b.ToTable("TransactionCategories", (string)null);
                 });
@@ -294,6 +293,23 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("AspNetUsers", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Infrastructure.Persistence.EmailSendCooldown", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Purpose")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("LastSentAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "Purpose");
+
+                    b.ToTable("EmailSendCooldowns", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
@@ -496,6 +512,15 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Infrastructure.Persistence.EmailSendCooldown", b =>
+                {
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

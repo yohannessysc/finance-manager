@@ -1,0 +1,53 @@
+<section class="verification-page">
+  <div class="verification-card">
+    <div class="brand">
+      <span class="brand-logo">F</span>
+      <strong>Finance Manager</strong>
+    </div>
+
+    <div class="icon-circle" aria-hidden="true">✉</div>
+
+    <span class="eyebrow">ACCOUNT VERIFICATION</span>
+    <h1>Check your email</h1>
+
+    <p class="description">
+      We've requested a verification email for your account. Open the email and click the
+      verification link to activate your Finance Manager account.
+    </p>
+
+    <label for="verificationEmail" class="email-label"> Email address </label>
+
+    <input
+      id="verificationEmail"
+      class="email-input"
+      type="email"
+      autocomplete="email"
+      placeholder="you@example.com"
+      [ngModel]="email()"
+      (ngModelChange)="email.set($event)"
+    />
+
+    <p class="instructions">
+      Didn't receive an email? Check your spam folder or request another verification link below.
+    </p>
+
+    @if (success()) {
+      <div class="feedback success" role="status">
+        If this account still needs verification, a new email has been requested. Please check your
+        inbox.
+      </div>
+    }
+
+    @if (error()) {
+      <div class="feedback error" role="alert">
+        {{ error() }}
+      </div>
+    }
+
+    <button type="button" class="primary-action" [disabled]="sending()" (click)="resend()">
+      {{ sending() ? 'Requesting verification...' : 'Resend verification email' }}
+    </button>
+
+    <a routerLink="/login" class="secondary-link"> Back to sign in </a>
+  </div>
+</section>

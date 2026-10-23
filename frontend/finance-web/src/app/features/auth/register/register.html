@@ -1,76 +1,201 @@
+<div class="auth-page">
+  <aside class="auth-showcase">
+    <div class="showcase-brand">
+      <div class="brand-mark">F</div>
+      <div class="brand-details">
+        <strong>Finance Manager</strong>
+        <span>Personal finance, simplified.</span>
+      </div>
+    </div>
 
-<section class="auth-page">
-  <div class="auth-card">
-    <div class="brand">Finance Manager</div>
-    <h1>Create your account</h1>
-    <p class="subtitle">
-      Start organizing your personal finances.
-    </p>
-
-    <form [formGroup]="form" (ngSubmit)="submit()">
-      <div class="field">
-        <label for="firstName">First name</label>
-        <input
-          id="firstName"
-          type="text"
-          autocomplete="given-name"
-          formControlName="firstName"
-        />
+    <div class="showcase-content">
+      <div class="showcase-eyebrow">
+        <span class="eyebrow-dot"></span>
+        START YOUR JOURNEY
       </div>
 
-      <div class="field">
-        <label for="lastName">Last name</label>
-        <input
-          id="lastName"
-          type="text"
-          autocomplete="family-name"
-          formControlName="lastName"
-        />
+      <h2>Build better<br />money habits.<br /><em>Starting today.</em></h2>
+
+      <p>
+        Make informed decisions, organize your finances, and build a clearer path toward your goals.
+      </p>
+
+      <div class="showcase-visual" aria-hidden="true">
+        <div class="visual-top">
+          <span>YOUR FINANCIAL JOURNEY</span>
+          <span class="visual-sparkle">✦</span>
+        </div>
+
+        <div class="visual-label">A workspace built around you</div>
+
+        <div class="visual-title">
+          See the bigger picture
+          <span>↗</span>
+        </div>
+
+        <div class="visual-bars">
+          <span style="height: 30%"></span>
+          <span style="height: 45%"></span>
+          <span style="height: 41%"></span>
+          <span style="height: 62%"></span>
+          <span style="height: 70%"></span>
+          <span style="height: 80%"></span>
+          <span style="height: 100%"></span>
+        </div>
+
+        <div class="visual-footer">
+          <span>Your money, organized</span>
+          <span>Your goals, in focus →</span>
+        </div>
       </div>
 
-      <div class="field">
-        <label for="registerEmail">Email address</label>
-        <input
-          id="registerEmail"
-          type="email"
-          autocomplete="email"
-          formControlName="email"
-        />
-        @if (form.controls.email.touched && form.controls.email.invalid) {
-          <small class="error">Enter a valid email address.</small>
+      <div class="showcase-points">
+        <span>✧ All your accounts</span>
+        <span>✧ Spending clarity</span>
+        <span>✧ Financial confidence</span>
+      </div>
+    </div>
+
+    <div class="showcase-bottom">
+      <span>Make every financial decision count.</span>
+      <span>© Finance Manager</span>
+    </div>
+  </aside>
+
+  <main class="auth-main">
+    <div class="mobile-brand">
+      <div class="brand-mark">F</div>
+      <strong>Finance Manager</strong>
+    </div>
+
+    <div class="auth-container">
+      <div class="auth-kicker">
+        GET STARTED
+        <span></span>
+      </div>
+
+      <h1>Create your account</h1>
+
+      <p class="auth-subtitle">A better way to understand your finances starts here.</p>
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <div class="name-fields">
+          <div class="field">
+            <label for="firstName">First name</label>
+            <input
+              id="firstName"
+              type="text"
+              autocomplete="given-name"
+              formControlName="firstName"
+              maxlength="100"
+              placeholder="First name"
+              [attr.aria-invalid]="
+                form.controls.firstName.touched && form.controls.firstName.invalid
+              "
+            />
+            @if (form.controls.firstName.touched && form.controls.firstName.invalid) {
+              <small class="field-error"> First name is required. </small>
+            }
+          </div>
+
+          <div class="field">
+            <label for="lastName">Last name</label>
+            <input
+              id="lastName"
+              type="text"
+              autocomplete="family-name"
+              formControlName="lastName"
+              maxlength="100"
+              placeholder="Last name"
+              [attr.aria-invalid]="form.controls.lastName.touched && form.controls.lastName.invalid"
+            />
+            @if (form.controls.lastName.touched && form.controls.lastName.invalid) {
+              <small class="field-error"> Last name is required. </small>
+            }
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="registerEmail">Email address</label>
+          <input
+            id="registerEmail"
+            type="email"
+            autocomplete="email"
+            formControlName="email"
+            placeholder="you@example.com"
+            [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid"
+          />
+          @if (form.controls.email.touched && form.controls.email.invalid) {
+            <small class="field-error"> Enter a valid email address. </small>
+          }
+        </div>
+
+        <div class="field">
+          <label for="registerPassword">Create password</label>
+
+          <div class="password-field">
+            <input
+              id="registerPassword"
+              [type]="showPassword() ? 'text' : 'password'"
+              autocomplete="new-password"
+              formControlName="password"
+              placeholder="Create a strong password"
+              [attr.aria-invalid]="form.controls.password.touched && form.controls.password.invalid"
+            />
+
+            <button
+              type="button"
+              class="password-toggle"
+              [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+              [attr.aria-pressed]="showPassword()"
+              (click)="togglePassword()"
+            >
+              {{ showPassword() ? 'Hide' : 'Show' }}
+            </button>
+          </div>
+
+          <small class="password-hint">
+            At least 12 characters, including uppercase, lowercase, a number, and a symbol.
+          </small>
+
+          @if (form.controls.password.touched && form.controls.password.invalid) {
+            <small class="field-error"> Password does not meet the requirements. </small>
+          }
+        </div>
+
+        @if (error()) {
+          <div class="form-alert" role="alert">
+            <span>!</span>
+            {{ error() }}
+          </div>
         }
+
+        <button type="submit" class="submit-button" [disabled]="submitting()">
+          <span>
+            {{ submitting() ? 'Creating your account...' : 'Create account' }}
+          </span>
+          @if (!submitting()) {
+            <span aria-hidden="true">→</span>
+          }
+        </button>
+      </form>
+
+      <div class="auth-divider">
+        <span></span>
+        <span>ALREADY HAVE AN ACCOUNT?</span>
+        <span></span>
       </div>
 
-      <div class="field">
-        <label for="registerPassword">Password</label>
-        <input
-          id="registerPassword"
-          type="password"
-          autocomplete="new-password"
-          formControlName="password"
-        />
-        <small>
-          At least 12 characters, including uppercase, lowercase,
-          a number, and a symbol.
-        </small>
+      <a class="alternate-action" routerLink="/login">
+        Sign in instead
+        <span aria-hidden="true">↗</span>
+      </a>
+
+      <div class="auth-footnote">
+        Your finances deserve a better workspace.
+        <br />
+        <span>Start tracking and planning with confidence.</span>
       </div>
-
-      @if (form.invalid && form.touched) {
-        <p class="error">Please complete all required fields correctly.</p>
-      }
-
-      @if (error()) {
-        <p class="error" role="alert">{{ error() }}</p>
-      }
-
-      <button type="submit" [disabled]="submitting() || form.invalid">
-        {{ submitting() ? 'Creating account...' : 'Create Account' }}
-      </button>
-    </form>
-
-    <p class="footer">
-      Already have an account?
-      <a routerLink="/login">Sign in</a>
-    </p>
-  </div>
-</section>
+    </div>
+  </main>
+</div>

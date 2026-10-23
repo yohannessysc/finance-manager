@@ -1,0 +1,422 @@
+<section class="recurring-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">AUTOMATED FINANCES</span>
+      <h1>Recurring payments</h1>
+      <p>Manage scheduled income, expenses, and transfers.</p>
+    </div>
+
+    <div class="header-actions">
+      <button type="button" class="btn secondary" [disabled]="loading()" (click)="loadData()">
+        ↻ Refresh
+      </button>
+
+      <button type="button" class="btn primary" (click)="openCreate()">+ New schedule</button>
+    </div>
+  </header>
+
+  @if (notice()) {
+    <div class="notice success" role="status">✓ {{ notice() }}</div>
+  }
+
+  @if (error()) {
+    <div class="notice error" role="alert">
+      {{ error() }}
+      <button type="button" (click)="loadData()">Retry</button>
+    </div>
+  }
+
+  <div class="summary-grid">
+    <article class="summary-card highlight">
+      <span class="summary-label">Active schedules</span>
+      <strong>{{ activeCount() }}</strong>
+      <span>Automatically processed when due</span>
+    </article>
+
+    <article class="summary-card">
+      <span class="summary-label">Upcoming</span>
+      <strong>{{ upcomingCount() }}</strong>
+      <span>Due within the next 30 days</span>
+    </article>
+
+    <article class="summary-card">
+      <span class="summary-label">Paused</span>
+      <strong>{{ pausedCount() }}</strong>
+      <span>Temporarily suspended schedules</span>
+    </article>
+  </div>
+
+  <section class="schedules-panel">
+    <div class="panel-heading">
+      <div>
+        <h2>All schedules</h2>
+        <p>Manage upcoming recurring financial activity</p>
+      </div>
+      <span class="count-pill">{{ filtered().length }} schedules</span>
+    </div>
+
+    <div class="filters">
+      <input
+        type="search"
+        aria-label="Search schedules"
+        placeholder="Search schedules or accounts..."
+        [value]="search()"
+        (input)="search.set($any($event.target).value)"
+      />
+
+      <select
+        aria-label="Filter status"
+        [value]="statusFilter()"
+        (change)="statusFilter.set($any($event.target).value)"
+      >
+        <option value="all">All statuses</option>
+        <option value="1">Active</option>
+        <option value="2">Paused</option>
+        <option value="3">Cancelled</option>
+      </select>
+
+      <select
+        aria-label="Filter type"
+        [value]="typeFilter()"
+        (change)="typeFilter.set($any($event.target).value)"
+      >
+        <option value="all">All types</option>
+        <option value="1">Income</option>
+        <option value="2">Expenses</option>
+        <option value="3">Transfers</option>
+      </select>
+    </div>
+
+    @if (loading()) {
+      <div class="empty-state">Loading schedules...</div>
+    } @else if (filtered().length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon">◷</div>
+        <h3>No recurring schedules</h3>
+        <p>Create a schedule to automatically record repeating activity.</p>
+        <button type="button" class="btn primary" (click)="openCreate()">Create schedule</button>
+      </div>
+    } @else {
+      <div class="schedule-grid">
+        @for (item of filtered(); track item.id) {
+          <article class="schedule-card">
+            <div class="schedule-top">
+              <div
+                class="schedule-icon"
+                [class.income]="item.type === types.Income"
+                [class.expense]="item.type === types.Expense"
+              >
+                {{ item.type === types.Income ? '↙' : item.type === types.Expense ? '↗' : '⇄' }}
+              </div>
+
+              <span
+                class="status-pill"
+                [class.active]="item.status === statuses.Active"
+                [class.paused]="item.status === statuses.Paused"
+                [class.cancelled]="item.status === statuses.Cancelled"
+              >
+                {{ statusLabel(item.status) }}
+              </span>
+            </div>
+
+            <div class="schedule-info">
+              <span class="schedule-type">
+                {{ typeLabel(item.type) }} ·
+                {{ frequencyLabel(item.frequency) }}
+              </span>
+              <h3>{{ item.description }}</h3>
+
+              <div class="schedule-amount">
+                {{ item.amount | currency: currencyFor(item) : 'symbol' : '1.2-2' }}
+                <small>/ {{ frequencyLabel(item.frequency).toLowerCase() }}</small>
+              </div>
+            </div>
+
+            <div class="schedule-details">
+              <div>
+                <span>From account</span>
+                <strong>{{ accountName(item.financialAccountId) }}</strong>
+              </div>
+
+              @if (item.destinationAccountId) {
+                <div>
+                  <span>To account</span>
+                  <strong>{{ accountName(item.destinationAccountId) }}</strong>
+                </div>
+              } @else if (item.categoryId) {
+                <div>
+                  <span>Category</span>
+                  <strong>{{ categoryName(item.categoryId) }}</strong>
+                </div>
+              }
+
+              <div>
+                <span>Next scheduled</span>
+                <strong>
+                  {{ item.nextOccurrenceUtc | date: 'MMM d, y, h:mm a' : item.timeZoneId }}
+                </strong>
+              </div>
+
+              <div>
+                <span>Time zone</span>
+                <strong>{{ item.timeZoneId }}</strong>
+              </div>
+
+              @if (item.endDateUtc) {
+                <div>
+                  <span>End date</span>
+                  <strong>
+                    {{ item.endDateUtc | date: 'MMM d, y' : item.timeZoneId }}
+                  </strong>
+                </div>
+              }
+            </div>
+
+            <div class="schedule-actions">
+              @if (item.status !== statuses.Cancelled) {
+                <button type="button" class="action-button" (click)="startEdit(item)">Edit</button>
+
+                @if (item.status === statuses.Active) {
+                  <button
+                    type="button"
+                    class="action-button"
+                    (click)="requestAction(item, 'pause')"
+                  >
+                    Pause
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    class="action-button"
+                    (click)="requestAction(item, 'resume')"
+                  >
+                    Resume
+                  </button>
+                }
+
+                <button
+                  type="button"
+                  class="action-button danger-text"
+                  (click)="requestAction(item, 'cancel')"
+                >
+                  Cancel
+                </button>
+              } @else {
+                <span class="cancelled-note"> Schedule cancelled · History retained </span>
+              }
+            </div>
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <p class="disclaimer">
+    Recurring schedules create records in Finance Manager when due. They do not execute real bank
+    payments.
+  </p>
+</section>
+
+@if (showForm()) {
+  <div class="modal-backdrop">
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="recurring-dialog-title">
+      <div class="modal-heading">
+        <div>
+          <h2 id="recurring-dialog-title">
+            {{ editingId() ? 'Edit schedule' : 'New recurring schedule' }}
+          </h2>
+          <p>Set up repeating financial activity.</p>
+        </div>
+
+        <button
+          type="button"
+          class="close-button"
+          aria-label="Close dialog"
+          [disabled]="saving()"
+          (click)="closeForm()"
+        >
+          ×
+        </button>
+      </div>
+
+      <form [formGroup]="form" (ngSubmit)="save()">
+        <div class="form-grid">
+          <div class="field">
+            <label for="recurringType">Transaction type</label>
+            <select id="recurringType" formControlName="type" (change)="onTypeChanged()">
+              <option [ngValue]="types.Expense">Expense</option>
+              <option [ngValue]="types.Income">Income</option>
+              <option [ngValue]="types.Transfer">Transfer</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="recurringFrequency">Frequency</label>
+            <select id="recurringFrequency" formControlName="frequency">
+              <option [ngValue]="frequencies.Daily">Daily</option>
+              <option [ngValue]="frequencies.Weekly">Weekly</option>
+              <option [ngValue]="frequencies.Biweekly">Every 2 weeks</option>
+              <option [ngValue]="frequencies.Monthly">Monthly</option>
+              <option [ngValue]="frequencies.Yearly">Yearly</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="recurringDescription">Description</label>
+          <input
+            id="recurringDescription"
+            type="text"
+            formControlName="description"
+            maxlength="500"
+            placeholder="e.g. Monthly rent"
+          />
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="recurringAmount">Amount</label>
+            <input
+              id="recurringAmount"
+              type="number"
+              min="0.01"
+              step="0.01"
+              formControlName="amount"
+            />
+          </div>
+
+          <div class="field">
+            <label for="recurringSource">Source account</label>
+            <select
+              id="recurringSource"
+              formControlName="financialAccountId"
+              (change)="onSourceChanged()"
+            >
+              <option value="">Select account</option>
+              @for (account of accounts(); track account.id) {
+                <option [value]="account.id">{{ account.name }} ({{ account.currency }})</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        @if (form.controls.type.value === types.Transfer) {
+          <div class="field">
+            <label for="recurringDestination">Destination account</label>
+            <select id="recurringDestination" formControlName="destinationAccountId">
+              <option value="">Select destination</option>
+              @for (account of availableDestinations(); track account.id) {
+                <option [value]="account.id">{{ account.name }} ({{ account.currency }})</option>
+              }
+            </select>
+            <small>Transfers require matching account currencies.</small>
+          </div>
+        } @else {
+          <div class="field">
+            <label for="recurringCategory">Category</label>
+            <select id="recurringCategory" formControlName="categoryId">
+              <option value="">Uncategorized</option>
+              @for (category of availableCategories(); track category.id) {
+                <option [value]="category.id">{{ category.name }}</option>
+              }
+            </select>
+          </div>
+        }
+
+        <div class="field">
+          <label for="recurringTimeZone">Schedule time zone</label>
+          <select id="recurringTimeZone" formControlName="timeZoneId">
+            @for (zone of timeZones; track zone) {
+              <option [value]="zone">{{ zone }}</option>
+            }
+          </select>
+          <small> Dates below are interpreted in this selected time zone. </small>
+        </div>
+
+        <div class="form-grid">
+          <div class="field">
+            <label for="recurringStart">Start date &amp; time</label>
+            <input id="recurringStart" type="datetime-local" formControlName="startDate" />
+          </div>
+
+          <div class="field">
+            <label for="recurringEnd">End date (optional)</label>
+            <input id="recurringEnd" type="datetime-local" formControlName="endDate" />
+          </div>
+        </div>
+
+        @if (formError()) {
+          <p class="form-error" role="alert">{{ formError() }}</p>
+        }
+
+        <div class="modal-actions">
+          <button type="button" class="btn secondary" [disabled]="saving()" (click)="closeForm()">
+            Cancel
+          </button>
+
+          <button type="submit" class="btn primary" [disabled]="saving()">
+            {{ saving() ? 'Saving...' : editingId() ? 'Save changes' : 'Create schedule' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+}
+
+@if (confirmation(); as item) {
+  <div class="modal-backdrop">
+    <section
+      class="modal confirmation-modal"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="status-dialog-title"
+    >
+      <div class="warning-icon">!</div>
+      <h2 id="status-dialog-title">
+        {{ item.action === 'pause' ? 'Pause' : item.action === 'resume' ? 'Resume' : 'Cancel' }}
+        schedule?
+      </h2>
+
+      <p>
+        Schedule: <strong>{{ item.description }}</strong>
+      </p>
+
+      <p>
+        @switch (item.action) {
+          @case ('pause') {
+            This schedule will stop posting until resumed.
+          }
+          @case ('resume') {
+            This schedule will become active again.
+          }
+          @case ('cancel') {
+            This schedule will be permanently cancelled. Previously recorded transactions remain in
+            your ledger.
+          }
+        }
+      </p>
+
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn secondary"
+          [disabled]="!!workingId()"
+          (click)="closeConfirmation()"
+        >
+          Go back
+        </button>
+
+        <button
+          type="button"
+          class="btn"
+          [class.primary]="item.action !== 'cancel'"
+          [class.danger]="item.action === 'cancel'"
+          [disabled]="!!workingId()"
+          (click)="confirmAction()"
+        >
+          {{ workingId() ? 'Processing...' : 'Confirm' }}
+        </button>
+      </div>
+    </section>
+  </div>
+}

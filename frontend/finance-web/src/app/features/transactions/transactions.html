@@ -1,0 +1,396 @@
+<section class="transactions-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">MONEY MOVEMENT</span>
+      <h1>Transactions</h1>
+      <p>Track income, expenses, and transfers across your accounts.</p>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn secondary" type="button" [disabled]="loading()" (click)="loadData()">
+        ↻ Refresh
+      </button>
+
+      <button class="btn primary" type="button" (click)="openCreate()">+ Add transaction</button>
+    </div>
+  </header>
+
+  @if (successMessage()) {
+    <div class="notice success" role="status">✓ {{ successMessage() }}</div>
+  }
+
+  @if (error()) {
+    <div class="notice error" role="alert">
+      {{ error() }}
+      <button type="button" (click)="loadData()">Retry</button>
+    </div>
+  }
+
+  <div class="summary-grid">
+    @for (item of currencySummaries(); track item.currency) {
+      <article class="summary-card">
+        <div class="summary-top">
+          <span>Income · {{ item.currency }}</span>
+          <span class="summary-icon income-icon">↙</span>
+        </div>
+        <strong class="summary-amount">
+          {{ item.income | currency: item.currency : 'symbol' : '1.2-2' }}
+        </strong>
+        <span class="summary-foot">Recorded income in current results</span>
+      </article>
+
+      <article class="summary-card">
+        <div class="summary-top">
+          <span>Expenses · {{ item.currency }}</span>
+          <span class="summary-icon expense-icon">↗</span>
+        </div>
+        <strong class="summary-amount">
+          {{ item.expenses | currency: item.currency : 'symbol' : '1.2-2' }}
+        </strong>
+        <span class="summary-foot">Recorded expenses in current results</span>
+      </article>
+
+      <article class="summary-card">
+        <div class="summary-top">
+          <span>Net cash flow · {{ item.currency }}</span>
+          <span class="summary-icon">◈</span>
+        </div>
+        <strong class="summary-amount">
+          {{ item.net | currency: item.currency : 'symbol' : '1.2-2' }}
+        </strong>
+        <span class="summary-foot">Income minus expenses</span>
+      </article>
+    }
+  </div>
+
+  <section class="table-panel">
+    <div class="table-heading">
+      <div>
+        <h2>Transaction history</h2>
+        <p>Search and manage recorded activity</p>
+      </div>
+
+      <span class="count-pill"> {{ filteredTransactions().length }} transactions </span>
+    </div>
+
+    <div class="filter-bar">
+      <input
+        class="search-input"
+        type="search"
+        aria-label="Search transactions"
+        placeholder="Search description, merchant, category..."
+        [value]="search()"
+        (input)="search.set($any($event.target).value)"
+      />
+
+      <select
+        aria-label="Filter transaction type"
+        [value]="typeFilter()"
+        (change)="typeFilter.set($any($event.target).value)"
+      >
+        <option value="all">All types</option>
+        <option value="1">Income</option>
+        <option value="2">Expenses</option>
+        <option value="3">Transfers</option>
+      </select>
+
+      <select
+        aria-label="Filter account"
+        [value]="accountFilter()"
+        (change)="accountFilter.set($any($event.target).value)"
+      >
+        <option value="all">All accounts</option>
+        @for (account of accounts(); track account.id) {
+          <option [value]="account.id">{{ account.name }}</option>
+        }
+      </select>
+    </div>
+
+    @if (loading()) {
+      <div class="empty-state">Loading transactions...</div>
+    } @else if (filteredTransactions().length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon">⇄</div>
+        <h3>No transactions found</h3>
+        <p>Record your first transaction or adjust your search filters.</p>
+        <button type="button" class="btn primary" (click)="openCreate()">Add transaction</button>
+      </div>
+    } @else {
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Transaction</th>
+              <th>Account</th>
+              <th>Category</th>
+              <th>Date</th>
+              <th>Amount</th>
+              <th class="actions-heading">Actions</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            @for (transaction of filteredTransactions(); track transaction.id) {
+              <tr>
+                <td>
+                  <div class="transaction-cell">
+                    <span
+                      class="transaction-icon"
+                      [class.income]="transaction.type === types.Income"
+                      [class.expense]="transaction.type === types.Expense"
+                    >
+                      {{
+                        transaction.type === types.Income
+                          ? '↙'
+                          : transaction.type === types.Expense
+                            ? '↗'
+                            : '⇄'
+                      }}
+                    </span>
+
+                    <div class="transaction-description">
+                      <strong>{{ transaction.description }}</strong>
+                      <span>
+                        {{ transaction.merchant || typeLabel(transaction.type) }}
+                      </span>
+                    </div>
+                  </div>
+                </td>
+
+                <td>
+                  <div class="account-cell">
+                    {{ accountName(transaction.financialAccountId) }}
+
+                    @if (transaction.type === types.Transfer) {
+                      <small> → {{ accountName(transaction.destinationAccountId) }} </small>
+                    }
+                  </div>
+                </td>
+
+                <td>
+                  <span class="category-pill">
+                    {{ categoryName(transaction) }}
+                  </span>
+                </td>
+
+                <td class="muted">
+                  {{ transaction.transactionDateUtc | date: 'MMM d, y' }}
+                </td>
+
+                <td>
+                  <span
+                    class="amount"
+                    [class.positive]="transaction.type === types.Income"
+                    [class.negative]="transaction.type === types.Expense"
+                  >
+                    {{
+                      transaction.type === types.Income
+                        ? '+'
+                        : transaction.type === types.Expense
+                          ? '−'
+                          : ''
+                    }}{{
+                      transaction.amount | currency: currencyFor(transaction) : 'symbol' : '1.2-2'
+                    }}
+                  </span>
+                </td>
+
+                <td>
+                  <div class="row-actions">
+                    @if (transaction.recurringTransactionId) {
+                      <span class="automatic-pill">Automatic</span>
+                    } @else {
+                      <button type="button" (click)="startEdit(transaction)">Edit</button>
+
+                      <button
+                        type="button"
+                        class="danger-text"
+                        (click)="requestDelete(transaction)"
+                      >
+                        Delete
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</section>
+
+<!-- Create/Edit Transaction Modal -->
+@if (showForm()) {
+  <div class="modal-backdrop">
+    <section
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="transaction-dialog-title"
+    >
+      <div class="modal-header">
+        <div>
+          <h2 id="transaction-dialog-title">
+            {{ editingId() ? 'Edit transaction' : 'New transaction' }}
+          </h2>
+          <p>Record money moving into, out of, or between accounts.</p>
+        </div>
+
+        <button
+          type="button"
+          class="close-button"
+          aria-label="Close"
+          [disabled]="saving()"
+          (click)="closeForm()"
+        >
+          ×
+        </button>
+      </div>
+
+      <form [formGroup]="transactionForm" (ngSubmit)="save()">
+        <div class="form-field">
+          <label for="transactionType">Transaction type</label>
+          <select id="transactionType" formControlName="type" (change)="onTypeChanged()">
+            <option [ngValue]="types.Expense">Expense</option>
+            <option [ngValue]="types.Income">Income</option>
+            <option [ngValue]="types.Transfer">Transfer</option>
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label for="sourceAccount">
+            {{
+              transactionForm.controls.type.value === types.Transfer ? 'From account' : 'Account'
+            }}
+          </label>
+
+          <select
+            id="sourceAccount"
+            formControlName="financialAccountId"
+            (change)="onSourceChanged()"
+          >
+            <option value="">Choose an account</option>
+            @for (account of accounts(); track account.id) {
+              <option [value]="account.id">{{ account.name }} ({{ account.currency }})</option>
+            }
+          </select>
+        </div>
+
+        @if (transactionForm.controls.type.value === types.Transfer) {
+          <div class="form-field">
+            <label for="destinationAccount">To account</label>
+            <select id="destinationAccount" formControlName="destinationAccountId">
+              <option value="">Choose destination</option>
+              @for (account of getDestinationAccounts(); track account.id) {
+                <option [value]="account.id">{{ account.name }} ({{ account.currency }})</option>
+              }
+            </select>
+            <small>Only accounts with matching currencies are shown.</small>
+          </div>
+        } @else {
+          <div class="form-field">
+            <label for="transactionCategory">Category</label>
+            <select id="transactionCategory" formControlName="categoryId">
+              <option value="">Uncategorized</option>
+              @for (category of filteredCategories(); track category.id) {
+                <option [value]="category.id">
+                  {{ category.name }}
+                </option>
+              }
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label for="transactionMerchant">Merchant / source (optional)</label>
+            <input
+              id="transactionMerchant"
+              type="text"
+              formControlName="merchant"
+              placeholder="e.g. Walmart, employer"
+              maxlength="200"
+            />
+          </div>
+        }
+
+        <div class="form-field">
+          <label for="transactionAmount">Amount</label>
+          <input
+            id="transactionAmount"
+            type="number"
+            min="0.01"
+            step="0.01"
+            formControlName="amount"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="transactionDescription">Description</label>
+          <input
+            id="transactionDescription"
+            type="text"
+            formControlName="description"
+            placeholder="e.g. Weekly groceries"
+            maxlength="500"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="transactionDate">Date and time</label>
+          <input id="transactionDate" type="datetime-local" formControlName="transactionDate" />
+        </div>
+
+        @if (formError()) {
+          <p class="form-error" role="alert">
+            {{ formError() }}
+          </p>
+        }
+
+        <div class="modal-actions">
+          <button class="btn secondary" type="button" [disabled]="saving()" (click)="closeForm()">
+            Cancel
+          </button>
+
+          <button class="btn primary" type="submit" [disabled]="saving()">
+            {{ saving() ? 'Saving...' : editingId() ? 'Save changes' : 'Record transaction' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+}
+
+<!-- Delete Confirmation -->
+@if (transactionToDelete(); as transaction) {
+  <div class="modal-backdrop">
+    <section
+      class="modal confirmation-modal"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="delete-transaction-title"
+    >
+      <div class="danger-icon">!</div>
+      <h2 id="delete-transaction-title">Delete transaction?</h2>
+      <p>
+        Permanently delete <strong>{{ transaction.description }}</strong
+        >?
+      </p>
+      <p>This will also change the calculated account balances and dashboard totals.</p>
+
+      <div class="modal-actions">
+        <button
+          class="btn secondary"
+          type="button"
+          [disabled]="deleting()"
+          (click)="cancelDelete()"
+        >
+          Cancel
+        </button>
+        <button class="btn danger" type="button" [disabled]="deleting()" (click)="confirmDelete()">
+          {{ deleting() ? 'Deleting...' : 'Delete transaction' }}
+        </button>
+      </div>
+    </section>
+  </div>
+}

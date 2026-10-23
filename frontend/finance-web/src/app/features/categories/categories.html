@@ -1,0 +1,308 @@
+<section class="categories-page">
+  <header class="page-heading">
+    <div>
+      <span class="eyebrow">YOUR MONEY, ORGANIZED</span>
+      <h1>Categories</h1>
+      <p>Keep your income and expenses organized with categories that make sense to you.</p>
+    </div>
+
+    <button
+      class="primary-button"
+      type="button"
+      [disabled]="loading() || types().length === 0"
+      (click)="openCreate()"
+    >
+      <span aria-hidden="true">＋</span>
+      New category
+    </button>
+  </header>
+
+  @if (notice()) {
+    <div class="feedback success" role="status">
+      {{ notice() }}
+      <button type="button" aria-label="Dismiss notification" (click)="notice.set('')">×</button>
+    </div>
+  }
+
+  @if (error()) {
+    <div class="feedback error" role="alert">
+      <span>{{ error() }}</span>
+      <button type="button" (click)="load()">Retry</button>
+    </div>
+  }
+
+  <div class="overview-grid">
+    <div class="summary-card">
+      <div class="summary-icon">↗</div>
+      <div>
+        <span>Expense categories</span>
+        <strong>{{ expenseCount() }}</strong>
+      </div>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-icon income">↓</div>
+      <div>
+        <span>Income categories</span>
+        <strong>{{ incomeCount() }}</strong>
+      </div>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-icon total">▦</div>
+      <div>
+        <span>Total categories</span>
+        <strong>{{ categories().length }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <section class="categories-panel">
+    <div class="panel-header">
+      <div class="tabs" role="group" aria-label="Category type">
+        <button
+          type="button"
+          [class.selected]="activeTab() === 'Expense'"
+          [attr.aria-pressed]="activeTab() === 'Expense'"
+          (click)="selectTab('Expense')"
+        >
+          Expenses
+          <span>{{ expenseCount() }}</span>
+        </button>
+
+        <button
+          type="button"
+          [class.selected]="activeTab() === 'Income'"
+          [attr.aria-pressed]="activeTab() === 'Income'"
+          (click)="selectTab('Income')"
+        >
+          Income
+          <span>{{ incomeCount() }}</span>
+        </button>
+      </div>
+
+      <label class="search-box">
+        <span aria-hidden="true">⌕</span>
+        <input
+          type="search"
+          placeholder="Search categories..."
+          aria-label="Search categories"
+          [value]="search()"
+          (input)="updateSearch($event)"
+        />
+      </label>
+    </div>
+
+    <div class="panel-content">
+      @if (loading()) {
+        <div class="empty-state" role="status">
+          <div class="empty-icon">◌</div>
+          <h2>Loading your categories</h2>
+          <p>Checking category usage.</p>
+        </div>
+      } @else if (filteredCategories().length === 0) {
+        <div class="empty-state">
+          <div class="empty-icon">▦</div>
+          <h2>No categories found</h2>
+          <p>
+            @if (search()) {
+              Try a different search term.
+            } @else {
+              Create your first {{ activeTab().toLowerCase() }}
+              category to get started.
+            }
+          </p>
+        </div>
+      } @else {
+        <div class="category-list">
+          @for (category of filteredCategories(); track category.id) {
+            <div class="category-item">
+              <div class="category-icon" aria-hidden="true">
+                {{ iconFor(category) }}
+              </div>
+
+              <div class="category-info">
+                <strong>{{ category.name }}</strong>
+
+                @if (usageFor(category.id); as usage) {
+                  <span>
+                    {{ usage.transactionCount }}
+                    {{ usage.transactionCount === 1 ? 'transaction' : 'transactions' }}
+                    ·
+                    {{ usage.recurringCount }}
+                    {{ usage.recurringCount === 1 ? 'recurring schedule' : 'recurring schedules' }}
+                  </span>
+
+                  <span>
+                    @if (usage.inUse) {
+                      🔒 In use — protected from deletion
+                    } @else {
+                      ✓ Not in use — can be deleted
+                    }
+                  </span>
+                } @else {
+                  <span>Usage unavailable — deletion disabled</span>
+                }
+              </div>
+
+              <div class="category-actions">
+                <button
+                  type="button"
+                  class="icon-button"
+                  [attr.aria-label]="'Edit ' + category.name"
+                  (click)="openEdit(category)"
+                >
+                  Edit
+                </button>
+
+                <button
+                  type="button"
+                  class="icon-button danger"
+                  [disabled]="!isDeletable(category.id)"
+                  [attr.aria-label]="'Delete ' + category.name"
+                  [attr.title]="
+                    isDeletable(category.id)
+                      ? 'Delete this category'
+                      : 'This category is in use or its usage is unavailable'
+                  "
+                  (click)="requestDelete(category)"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </section>
+
+  @if (editorOpen()) {
+    <div class="dialog-backdrop">
+      <section
+        class="dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="category-dialog-title"
+      >
+        <div class="dialog-header">
+          <div>
+            <span class="eyebrow">CATEGORY DETAILS</span>
+            <h2 id="category-dialog-title">
+              {{ editingId() ? 'Edit category' : 'New category' }}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            class="close-button"
+            aria-label="Close dialog"
+            [disabled]="saving()"
+            (click)="closeEditor()"
+          >
+            ×
+          </button>
+        </div>
+
+        <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+          <label class="form-field">
+            <span>Category name</span>
+            <input
+              formControlName="name"
+              maxlength="150"
+              placeholder="e.g. Travel"
+              autocomplete="off"
+            />
+          </label>
+
+          @if (form.controls.name.invalid && form.controls.name.touched) {
+            <small class="field-error"> Enter a category name (maximum 150 characters). </small>
+          }
+
+          <label class="form-field">
+            <span>Category type</span>
+            <select formControlName="type">
+              @for (type of types(); track type.name) {
+                <option [value]="type.value">
+                  {{ type.name }}
+                </option>
+              }
+            </select>
+          </label>
+
+          @if (editingId()) {
+            <p class="field-note">Category type can't be changed after creation.</p>
+          }
+
+          @if (formError()) {
+            <p class="dialog-error" role="alert">
+              {{ formError() }}
+            </p>
+          }
+
+          <div class="dialog-actions">
+            <button
+              type="button"
+              class="secondary-button"
+              [disabled]="saving()"
+              (click)="closeEditor()"
+            >
+              Cancel
+            </button>
+
+            <button type="submit" class="primary-button" [disabled]="saving()">
+              {{ saving() ? 'Saving...' : editingId() ? 'Save changes' : 'Create category' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+
+  @if (pendingDelete(); as category) {
+    <div class="dialog-backdrop">
+      <section
+        class="dialog confirmation"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-title"
+        aria-describedby="delete-description"
+      >
+        <div class="warning-icon">!</div>
+
+        <h2 id="delete-title">Delete category?</h2>
+
+        <p id="delete-description">
+          Are you sure you want to delete
+          <strong>{{ category.name }}</strong
+          >? This action can't be undone.
+        </p>
+
+        <p class="field-note">
+          Deletion will be prevented if this category is referenced by any transactions or recurring
+          schedules.
+        </p>
+
+        <div class="dialog-actions">
+          <button
+            type="button"
+            class="secondary-button"
+            [disabled]="deleting()"
+            (click)="cancelDelete()"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            class="delete-button"
+            [disabled]="deleting()"
+            (click)="confirmDelete()"
+          >
+            {{ deleting() ? 'Deleting...' : 'Delete category' }}
+          </button>
+        </div>
+      </section>
+    </div>
+  }
+</section>

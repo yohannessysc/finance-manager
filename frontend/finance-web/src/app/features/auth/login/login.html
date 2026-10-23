@@ -1,51 +1,205 @@
+<div class="auth-page">
+  <aside class="auth-showcase">
+    <div class="showcase-brand">
+      <div class="brand-mark">F</div>
+      <div class="brand-details">
+        <strong>Finance Manager</strong>
+        <span>Personal finance, simplified.</span>
+      </div>
+    </div>
 
-<section class="auth-page">
-  <div class="auth-card">
-    <div class="brand">Finance Manager</div>
-    <h1>Welcome back</h1>
-    <p class="subtitle">Sign in to manage your financial accounts.</p>
-
-    <form [formGroup]="form" (ngSubmit)="submit()">
-      <div class="field">
-        <label for="email">Email address</label>
-        <input
-          id="email"
-          type="email"
-          autocomplete="username"
-          formControlName="email"
-          placeholder="you@example.com"
-        />
-        @if (form.controls.email.touched && form.controls.email.invalid) {
-          <small class="error">Enter a valid email address.</small>
-        }
+    <div class="showcase-content">
+      <div class="showcase-eyebrow">
+        <span class="eyebrow-dot"></span>
+        YOUR FINANCIAL WORKSPACE
       </div>
 
-      <div class="field">
-        <label for="password">Password</label>
-        <input
-          id="password"
-          type="password"
-          autocomplete="current-password"
-          formControlName="password"
-          placeholder="Enter your password"
-        />
-        @if (form.controls.password.touched && form.controls.password.invalid) {
-          <small class="error">Password is required.</small>
-        }
+      <h2>
+        Clarity for<br />
+        every financial<br />
+        <em>decision.</em>
+      </h2>
+
+      <p>
+        Bring your accounts, spending, and financial goals together in one thoughtfully designed
+        workspace.
+      </p>
+
+      <div class="showcase-visual" aria-hidden="true">
+        <div class="visual-top">
+          <span>YOUR FINANCES AT A GLANCE</span>
+          <span class="visual-sparkle">✦</span>
+        </div>
+
+        <div class="visual-label">Total financial overview</div>
+
+        <div class="visual-title">
+          One clear picture
+          <span>↗</span>
+        </div>
+
+        <div class="visual-bars">
+          <span style="height: 40%"></span>
+          <span style="height: 57%"></span>
+          <span style="height: 49%"></span>
+          <span style="height: 72%"></span>
+          <span style="height: 65%"></span>
+          <span style="height: 87%"></span>
+          <span style="height: 100%"></span>
+        </div>
+
+        <div class="visual-footer">
+          <span>Track your progress</span>
+          <span>Plan with confidence →</span>
+        </div>
       </div>
 
-      @if (error()) {
-        <p class="error" role="alert">{{ error() }}</p>
-      }
+      <div class="showcase-points">
+        <span>✧ Spending insights</span>
+        <span>✧ Smart organization</span>
+        <span>✧ Better planning</span>
+      </div>
+    </div>
 
-      <button type="submit" [disabled]="submitting() || form.invalid">
-        {{ submitting() ? 'Signing in...' : 'Sign In' }}
-      </button>
-    </form>
+    <div class="showcase-bottom">
+      <span>Built for a clearer financial future.</span>
+      <span>© Finance Manager</span>
+    </div>
+  </aside>
 
-    <p class="footer">
-      Don't have an account?
-      <a routerLink="/register">Create an account</a>
-    </p>
-  </div>
-</section>
+  <main class="auth-main">
+    <div class="mobile-brand">
+      <div class="brand-mark">F</div>
+      <strong>Finance Manager</strong>
+    </div>
+
+    <div class="auth-container">
+      <div class="auth-kicker">
+        WELCOME BACK
+        <span></span>
+      </div>
+
+      <h1>Sign in to your account</h1>
+
+      <p class="auth-subtitle">Your financial workspace is waiting for you.</p>
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <!-- EMAIL ADDRESS -->
+        <div class="field">
+          <label for="email">Email address</label>
+
+          <input
+            id="email"
+            type="email"
+            autocomplete="username"
+            formControlName="email"
+            placeholder="you@example.com"
+            [attr.aria-invalid]="form.controls.email.touched && form.controls.email.invalid"
+          />
+
+          @if (form.controls.email.touched && form.controls.email.invalid) {
+            <small class="field-error"> Enter a valid email address. </small>
+          }
+        </div>
+
+        <!-- PASSWORD -->
+        <div class="field">
+          <div class="field-label-row">
+            <label for="password"> Password </label>
+
+            <a routerLink="/forgot-password" class="forgot-link"> Forgot password? </a>
+          </div>
+
+          <div class="password-field">
+            <input
+              id="password"
+              [type]="showPassword() ? 'text' : 'password'"
+              autocomplete="current-password"
+              formControlName="password"
+              placeholder="Enter your password"
+              [attr.aria-invalid]="form.controls.password.touched && form.controls.password.invalid"
+            />
+
+            <button
+              type="button"
+              class="password-toggle"
+              [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+              [attr.aria-pressed]="showPassword()"
+              (click)="togglePassword()"
+            >
+              {{ showPassword() ? 'Hide' : 'Show' }}
+            </button>
+          </div>
+
+          @if (form.controls.password.touched && form.controls.password.invalid) {
+            <small class="field-error"> Password is required. </small>
+          }
+        </div>
+
+        <!-- EMAIL NOT VERIFIED -->
+        @if (needsVerification()) {
+          <div class="verification-alert" role="alert">
+            <div class="alert-heading">
+              <span aria-hidden="true">!</span>
+              <strong> Email verification required </strong>
+            </div>
+
+            <p>
+              Please verify your email address using the verification link sent to your inbox before
+              signing in.
+            </p>
+
+            <p>Didn't receive the email? You can request another verification link below.</p>
+
+            <a
+              routerLink="/verify-email"
+              [queryParams]="{
+                email: form.controls.email.value,
+              }"
+            >
+              Resend verification email
+              <span aria-hidden="true">→</span>
+            </a>
+          </div>
+        }
+
+        <!-- INVALID CREDENTIALS OR ACCOUNT LOCKED -->
+        @else if (error()) {
+          <div class="form-alert" role="alert">
+            <span aria-hidden="true">!</span>
+            {{ error() }}
+          </div>
+        }
+
+        <!-- SIGN IN BUTTON -->
+        <button type="submit" class="submit-button" [disabled]="submitting()">
+          <span>
+            {{ submitting() ? 'Signing you in...' : 'Sign in' }}
+          </span>
+
+          @if (!submitting()) {
+            <span aria-hidden="true">→</span>
+          }
+        </button>
+      </form>
+
+      <!-- REGISTRATION LINK -->
+      <div class="auth-divider">
+        <span></span>
+        <span>NEW TO FINANCE MANAGER?</span>
+        <span></span>
+      </div>
+
+      <a class="alternate-action" routerLink="/register">
+        Create a free account
+        <span aria-hidden="true">↗</span>
+      </a>
+
+      <div class="auth-footnote">
+        Your financial data belongs to you.
+        <br />
+        <span> Take control, one decision at a time. </span>
+      </div>
+    </div>
+  </main>
+</div>

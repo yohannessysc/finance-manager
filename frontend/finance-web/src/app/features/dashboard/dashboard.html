@@ -1,0 +1,229 @@
+<section class="dashboard">
+  <div class="page-heading">
+    <div>
+      <div class="eyebrow">FINANCIAL OVERVIEW</div>
+      <h1>Dashboard</h1>
+      <p>A clearer picture of your money, all in one place.</p>
+    </div>
+
+    <div class="heading-actions">
+      @if (currencies().length > 1) {
+        <select
+          aria-label="Select currency"
+          [value]="selectedCurrency()"
+          (change)="setCurrency($any($event.target).value)"
+        >
+          @for (currency of currencies(); track currency) {
+            <option [value]="currency">{{ currency }}</option>
+          }
+        </select>
+      }
+
+      <button type="button" class="refresh" (click)="loadDashboard()">↻ Refresh</button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="state-card">Loading your financial overview...</div>
+  } @else if (error()) {
+    <div class="state-card error" role="alert">
+      {{ error() }}
+      <button type="button" (click)="loadDashboard()">Retry</button>
+    </div>
+  } @else {
+    <div class="summary-grid">
+      <article class="summary-card balance-card">
+        <div class="card-caption">Total balance</div>
+        <div class="summary-value">
+          {{ totalBalance() | currency: selectedCurrency() : 'symbol' : '1.2-2' }}
+        </div>
+        <div class="card-foot">Across {{ accounts().length }} accounts</div>
+      </article>
+
+      <article class="summary-card">
+        <div class="card-caption">Monthly income</div>
+        <div class="summary-value">
+          {{ currentMonth()?.totalIncome ?? 0 | currency: selectedCurrency() : 'symbol' : '1.2-2' }}
+        </div>
+        <div class="card-foot positive">↑ Money coming in</div>
+      </article>
+
+      <article class="summary-card">
+        <div class="card-caption">Monthly expenses</div>
+        <div class="summary-value">
+          {{
+            currentMonth()?.totalExpenses ?? 0 | currency: selectedCurrency() : 'symbol' : '1.2-2'
+          }}
+        </div>
+        <div class="card-foot">↓ Money going out</div>
+      </article>
+
+      <article class="summary-card">
+        <div class="card-caption">Net cash flow</div>
+        <div class="summary-value">
+          {{ currentMonth()?.netCashFlow ?? 0 | currency: selectedCurrency() : 'symbol' : '1.2-2' }}
+        </div>
+        <div class="card-foot">Income minus expenses</div>
+      </article>
+    </div>
+
+    <div class="content-grid">
+      <article class="panel chart-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Cash flow</h2>
+            <p>Income and expenses over six months</p>
+          </div>
+          <div class="chart-legend">
+            <span><i class="legend-income"></i> Income</span>
+            <span><i class="legend-expense"></i> Expenses</span>
+          </div>
+        </div>
+
+        <div class="chart" role="img" aria-label="Six-month income and expense bar chart">
+          @for (month of monthlyTrend(); track month.year + '-' + month.month) {
+            <div class="chart-column">
+              <div class="bars">
+                <div
+                  class="bar income"
+                  [style.height.%]="barHeight(month.totalIncome)"
+                  [title]="'Income: ' + month.totalIncome"
+                ></div>
+                <div
+                  class="bar expense"
+                  [style.height.%]="barHeight(month.totalExpenses)"
+                  [title]="'Expenses: ' + month.totalExpenses"
+                ></div>
+              </div>
+              <span>{{ monthLabel(month.month) }}</span>
+            </div>
+          }
+        </div>
+      </article>
+
+      <article class="panel spending-panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Spending breakdown</h2>
+            <p>Where your money went this month</p>
+          </div>
+        </div>
+
+        @if (spending().length === 0) {
+          <p class="empty">No expenses recorded this month.</p>
+        } @else {
+          <div class="spending-list">
+            @for (category of spending(); track category.categoryId) {
+              <div class="spending-item">
+                <div class="spending-label">
+                  <strong>{{ category.categoryName }}</strong>
+                  <span>{{
+                    category.amount | currency: selectedCurrency() : 'symbol' : '1.2-2'
+                  }}</span>
+                </div>
+                <div class="progress-track">
+                  <div class="progress-fill" [style.width.%]="category.percentage"></div>
+                </div>
+                <div class="percentage">
+                  {{ category.percentage | number: '1.0-1' }}% of spending
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </article>
+    </div>
+
+    <div class="content-grid bottom-grid">
+      <article class="panel">
+        <div class="panel-heading">
+          <div>
+            <h2>Recent transactions</h2>
+            <p>Your latest recorded activity</p>
+          </div>
+        </div>
+
+        @if (transactions().length === 0) {
+          <p class="empty">No transactions to display.</p>
+        } @else {
+          <div class="transaction-list">
+            @for (transaction of transactions(); track transaction.id) {
+              <div class="transaction-row">
+                <div class="transaction-icon" [class.income-icon]="transaction.type === 1">
+                  {{ transaction.type === 1 ? '↙' : transaction.type === 2 ? '↗' : '⇄' }}
+                </div>
+
+                <div class="transaction-info">
+                  <strong>{{ transaction.description }}</strong>
+                  <span>
+                    {{ accountName(transaction) }} ·
+                    {{ transaction.transactionDateUtc | date: 'MMM d, y' }}
+                  </span>
+                </div>
+
+                <div class="transaction-amount" [class.positive]="transaction.type === 1">
+                  {{ transactionSign(transaction)
+                  }}{{ transaction.amount | currency: selectedCurrency() : 'symbol' : '1.2-2' }}
+                  <small>{{ transactionLabel(transaction) }}</small>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </article>
+
+      <div class="right-column">
+        <article class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Your accounts</h2>
+              <p>Calculated account balances</p>
+            </div>
+            <a routerLink="/accounts">View all →</a>
+          </div>
+
+          @for (account of accounts(); track account.accountId) {
+            <div class="account-row">
+              <div class="account-icon">▣</div>
+              <div class="account-info">
+                <strong>{{ account.accountName }}</strong>
+                <span>{{ account.currency }}</span>
+              </div>
+              <div class="account-amount">
+                {{ account.currentBalance | currency: account.currency : 'symbol' : '1.2-2' }}
+              </div>
+            </div>
+          } @empty {
+            <p class="empty">No accounts yet.</p>
+          }
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Upcoming payments</h2>
+              <p>Scheduled recurring activity</p>
+            </div>
+          </div>
+
+          @for (payment of upcoming(); track payment.id) {
+            <div class="account-row">
+              <div class="account-icon calendar-icon">◷</div>
+              <div class="account-info">
+                <strong>{{ payment.description }}</strong>
+                <span>
+                  {{ payment.nextOccurrenceUtc | date: 'MMM d, y' }}
+                </span>
+              </div>
+              <div class="account-amount">
+                {{ payment.amount | currency: payment.currency : 'symbol' : '1.2-2' }}
+              </div>
+            </div>
+          } @empty {
+            <p class="empty">No upcoming recurring payments.</p>
+          }
+        </article>
+      </div>
+    </div>
+  }
+</section>

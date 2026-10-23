@@ -1,0 +1,259 @@
+
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.recovery-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background:
+    radial-gradient(
+      circle at 12% 12%,
+      rgba(65, 196, 154, 0.12),
+      transparent 36%
+    ),
+    radial-gradient(
+      circle at 88% 90%,
+      rgba(65, 196, 154, 0.06),
+      transparent 35%
+    ),
+    var(--fm-background, #f7f9fa);
+  color: var(--fm-text, #19262b);
+  font-family: Inter, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+}
+
+.recovery-card {
+  width: 100%;
+  max-width: 515px;
+  padding: clamp(30px, 5vw, 52px);
+  border-radius: 24px;
+  border: 1px solid var(--fm-border, #e0e6e9);
+  background: var(--fm-surface, #fff);
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.09);
+  text-align: center;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 42px;
+  color: var(--fm-text, #19262b);
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.brand-mark {
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #13866b;
+  color: white;
+  font-size: 26px;
+  font-weight: 850;
+}
+
+.hero-icon {
+  width: 94px;
+  height: 94px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 28px;
+  border-radius: 25px;
+  background: var(--fm-primary-soft, #e4f5ef);
+  color: var(--fm-primary, #13866b);
+  font-size: 39px;
+}
+
+.success-icon {
+  background: #13866b;
+  color: white;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 14px;
+  color: var(--fm-primary, #13866b);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.7px;
+}
+
+h1 {
+  margin: 0 0 18px;
+  color: var(--fm-text, #19262b);
+  font-size: clamp(29px, 4vw, 37px);
+  letter-spacing: -1.4px;
+  line-height: 1.2;
+}
+
+.description,
+.hint {
+  color: var(--fm-muted, #718096);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.description {
+  margin: 0 auto 30px;
+  max-width: 395px;
+}
+
+.description strong {
+  color: var(--fm-text, #19262b);
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  margin: -8px 0 25px;
+}
+
+.field {
+  margin-bottom: 20px;
+  text-align: left;
+
+  label {
+    display: block;
+    margin-bottom: 10px;
+    color: var(--fm-text, #19262b);
+    font-size: 12px;
+    font-weight: 750;
+  }
+
+  input {
+    display: block;
+    width: 100%;
+    min-height: 51px;
+    padding: 12px 15px;
+    border: 1px solid var(--fm-border, #dce4e7);
+    border-radius: 11px;
+    background: var(--fm-background, #f7f9fa);
+    color: var(--fm-text, #19262b);
+    font: inherit;
+    font-size: 13px;
+
+    &:focus {
+      outline: 2px solid var(--fm-primary, #13866b);
+      outline-offset: 2px;
+    }
+
+    &::placeholder {
+      color: var(--fm-muted, #718096);
+    }
+  }
+}
+
+.password-input {
+  position: relative;
+
+  input {
+    padding-right: 80px;
+  }
+}
+
+.visibility-button {
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fm-primary, #13866b);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.field-hint,
+.field-error {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.field-hint {
+  color: var(--fm-muted, #718096);
+}
+
+.field-error,
+.form-error {
+  color: #d65b5b;
+}
+
+.form-error {
+  margin: 0 0 20px;
+  padding: 13px;
+  border: 1px solid rgba(214, 91, 91, 0.3);
+  border-radius: 10px;
+  background: rgba(214, 91, 91, 0.07);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.primary-action {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 18px;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 11px;
+  background: #13866b;
+  color: white;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #0f745e;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+}
+
+.back-link {
+  display: inline-block;
+  margin-top: 24px;
+  color: var(--fm-primary, #13866b);
+  font-size: 12px;
+  font-weight: 750;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+@media (max-width: 550px) {
+  .recovery-page {
+    padding: 18px;
+  }
+
+  .recovery-card {
+    padding: 28px 22px;
+    border-radius: 18px;
+  }
+}

@@ -1,0 +1,78 @@
+<section class="verification-page">
+  <div class="verification-card">
+    <div class="brand">
+      <span class="brand-logo">F</span>
+      <strong>Finance Manager</strong>
+    </div>
+
+    @if (status() === 'success') {
+      <div class="icon-circle success-icon" aria-hidden="true">✓</div>
+
+      <span class="eyebrow">VERIFICATION COMPLETE</span>
+      <h1>Email verified!</h1>
+
+      <p class="description">
+        Your email address has been confirmed successfully. Your Finance Manager account is ready
+        for sign-in.
+      </p>
+
+      <a routerLink="/login" class="primary-action">
+        Continue to sign in <span aria-hidden="true">→</span>
+      </a>
+    } @else {
+      <div class="icon-circle" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="38"
+          height="38"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12 2 4 6v5c0 5.5 3.6 9.5 8 11
+                   4.4-1.5 8-5.5 8-11V6l-8-4Z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </svg>
+      </div>
+
+      <span class="eyebrow">ACCOUNT SECURITY</span>
+
+      @if (status() === 'error') {
+        <h1>Verification unsuccessful</h1>
+        <p class="description" role="alert">{{ error() }}</p>
+
+        @if (email && token) {
+          <button type="button" class="primary-action" (click)="retry()">Try again</button>
+        }
+
+        <a routerLink="/login" class="secondary-link"> Back to sign in </a>
+      } @else {
+        <h1>Confirm your email</h1>
+
+        <p class="description">
+          You're one step away from activating your Finance Manager account.
+        </p>
+
+        @if (email) {
+          <div class="email-display">{{ email }}</div>
+        }
+
+        <button
+          type="button"
+          class="primary-action"
+          [disabled]="status() === 'loading'"
+          (click)="confirm()"
+        >
+          {{ status() === 'loading' ? 'Verifying your email...' : 'Verify my email' }}
+          @if (status() !== 'loading') {
+            <span aria-hidden="true">→</span>
+          }
+        </button>
+      }
+    }
+  </div>
+</section>

@@ -367,6 +367,11 @@ builder.Services.AddScoped<DefaultCategorySeeder>();
 // Server-side login sessions
 builder.Services.AddScoped<UserSessionService>();
 
+// Bank integration services
+builder.Services.AddScoped<IBankConnectionService, BankConnectionService>();
+builder.Services.AddScoped<IBankSyncService, BankSyncService>();
+builder.Services.AddScoped<ICategoryRuleService, CategoryRuleService>();
+
 // ---------------------------------------
 // 10. Real Email Delivery — Resend
 // ---------------------------------------

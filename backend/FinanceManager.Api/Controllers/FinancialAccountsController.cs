@@ -139,4 +139,49 @@ public class FinancialAccountsController : ControllerBase
             ? NoContent()
             : NotFound();
     }
+
+    [HttpPost("{id:guid}/share")]
+    public async Task<IActionResult> ShareAccount(
+        Guid id,
+        [FromBody] ShareAccountRequest request,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        try
+        {
+            var account = await _accountService.ShareAsync(
+                id,
+                userId.Value,
+                request.HouseholdId,
+                ct);
+            return account is null ? NotFound() : Ok(account);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { message = exception.Message });
+        }
+    }
+
+    [HttpDelete("{id:guid}/share")]
+    public async Task<IActionResult> UnshareAccount(
+        Guid id,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        var account = await _accountService.UnshareAsync(
+            id,
+            userId.Value,
+            ct);
+        return account is null ? NotFound() : Ok(account);
+    }
 }

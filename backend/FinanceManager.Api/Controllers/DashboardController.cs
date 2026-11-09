@@ -51,4 +51,29 @@ public class DashboardController : ControllerBase
 
         return Ok(summary);
     }
+
+    [HttpGet("forecast")]
+    public async Task<IActionResult> GetForecast(
+        [FromQuery] int days = 30,
+        CancellationToken ct = default)
+    {
+        if (days is < 1 or > 365)
+        {
+            return BadRequest(new
+            {
+                message = "Forecast horizon must be between 1 and 365 days."
+            });
+        }
+
+        var userId = GetCurrentUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        var forecast = await _dashboardService.GetForecastAsync(
+            userId.Value,
+            days,
+            ct);
+
+        return Ok(forecast);
+    }
 }

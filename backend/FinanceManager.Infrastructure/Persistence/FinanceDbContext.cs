@@ -37,6 +37,31 @@ public class FinanceDbContext
     public DbSet<EmailSendCooldown> EmailSendCooldowns
         => Set<EmailSendCooldown>();
 
+    // Per-user display and budgeting preferences
+    public DbSet<UserPreference> UserPreferences
+        => Set<UserPreference>();
+
+    // Server-side login sessions
+    public DbSet<UserSession> UserSessions
+        => Set<UserSession>();
+
+    public DbSet<MonthlyBudget> MonthlyBudgets
+        => Set<MonthlyBudget>();
+
+    public DbSet<SavingsGoal> SavingsGoals
+        => Set<SavingsGoal>();
+
+    public DbSet<SavingsGoalContribution> SavingsGoalContributions
+        => Set<SavingsGoalContribution>();
+
+    public DbSet<Household> Households => Set<Household>();
+
+    public DbSet<HouseholdMember> HouseholdMembers
+        => Set<HouseholdMember>();
+
+    public DbSet<HouseholdInvitation> HouseholdInvitations
+        => Set<HouseholdInvitation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -75,6 +100,11 @@ public class FinanceDbContext
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(x => x.UserId);
+
+            entity.HasOne<Household>()
+                .WithMany()
+                .HasForeignKey(x => x.HouseholdId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // ==========================================
@@ -213,6 +243,9 @@ public class FinanceDbContext
 
             entity.Property(x => x.ScheduledOccurrenceUtc);
 
+            entity.Property(x => x.ImportFingerprint)
+                .HasMaxLength(64);
+
             entity.HasOne<ApplicationUser>()
                 .WithMany()
                 .HasForeignKey(x => x.UserId)
@@ -243,6 +276,89 @@ public class FinanceDbContext
                 x.UserId,
                 x.TransactionDateUtc
             });
+
+            modelBuilder.Entity<Household>(entity =>
+            {
+                entity.ToTable("Households");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Name)
+                    .IsRequired()
+                    .HasMaxLength(100);
+                entity.Property(x => x.CreatedAtUtc)
+                    .IsRequired()
+                    .HasColumnType("timestamp with time zone");
+                entity.HasOne<ApplicationUser>()
+                    .WithMany()
+                    .HasForeignKey(x => x.OwnerUserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasIndex(x => x.OwnerUserId);
+            });
+
+            modelBuilder.Entity<HouseholdMember>(entity =>
+            {
+                entity.ToTable("HouseholdMembers");
+                entity.HasKey(x => new { x.HouseholdId, x.UserId });
+                entity.Property(x => x.Role).IsRequired();
+                entity.Property(x => x.JoinedAtUtc)
+                    .IsRequired()
+                    .HasColumnType("timestamp with time zone");
+                entity.HasOne<Household>()
+                    .WithMany()
+                    .HasForeignKey(x => x.HouseholdId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne<ApplicationUser>()
+                    .WithMany()
+                    .HasForeignKey(x => x.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasIndex(x => new { x.UserId, x.HouseholdId });
+            });
+
+            modelBuilder.Entity<HouseholdInvitation>(entity =>
+            {
+                entity.ToTable("HouseholdInvitations");
+                entity.HasKey(x => x.Id);
+                entity.Property(x => x.Email)
+                    .IsRequired()
+                    .HasMaxLength(256);
+                entity.Property(x => x.NormalizedEmail)
+                    .IsRequired()
+                    .HasMaxLength(256);
+                entity.Property(x => x.Role).IsRequired();
+                entity.Property(x => x.TokenHash)
+                    .IsRequired()
+                    .HasMaxLength(64);
+                entity.Property(x => x.CreatedAtUtc)
+                    .IsRequired()
+                    .HasColumnType("timestamp with time zone");
+                entity.Property(x => x.ExpiresAtUtc)
+                    .IsRequired()
+                    .HasColumnType("timestamp with time zone");
+                entity.Property(x => x.AcceptedAtUtc)
+                    .HasColumnType("timestamp with time zone");
+                entity.HasOne<Household>()
+                    .WithMany()
+                    .HasForeignKey(x => x.HouseholdId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne<ApplicationUser>()
+                    .WithMany()
+                    .HasForeignKey(x => x.InvitedByUserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                entity.HasIndex(x => x.TokenHash).IsUnique();
+                entity.HasIndex(x => new
+                {
+                    x.HouseholdId,
+                    x.NormalizedEmail,
+                    x.ExpiresAtUtc
+                });
+            });
+
+            entity.HasIndex(x => new
+            {
+                x.UserId,
+                x.ImportFingerprint
+            })
+            .IsUnique()
+            .HasFilter("\"ImportFingerprint\" IS NOT NULL");
 
             entity.HasIndex(x => new
             {
@@ -282,6 +398,206 @@ public class FinanceDbContext
                 .WithMany()
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserPreference>(entity =>
+        {
+            entity.ToTable("UserPreferences");
+
+            entity.HasKey(x => x.UserId);
+
+            entity.Property(x => x.DefaultCurrency)
+                .IsRequired()
+                .HasMaxLength(3);
+
+            entity.Property(x => x.TimeZone)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(x => x.DateFormat)
+                .IsRequired()
+                .HasMaxLength(30);
+
+            entity.Property(x => x.BudgetStartDay)
+                .IsRequired();
+
+            entity.Property(x => x.UpdatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasOne<ApplicationUser>()
+                .WithOne()
+                .HasForeignKey<UserPreference>(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserSession>(entity =>
+        {
+            entity.ToTable("UserSessions");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.CreatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.LastSeenAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.ExpiresAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.RevokedAtUtc)
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.UserAgent)
+                .IsRequired()
+                .HasMaxLength(500);
+
+            entity.Property(x => x.DeviceName)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(x => new { x.UserId, x.ExpiresAtUtc });
+        });
+
+        modelBuilder.Entity<MonthlyBudget>(entity =>
+        {
+            entity.ToTable("MonthlyBudgets");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Currency)
+                .IsRequired()
+                .HasMaxLength(3);
+
+            entity.Property(x => x.MonthlyLimit)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.UpdatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne<TransactionCategory>()
+                .WithMany()
+                .HasForeignKey(x => x.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => new
+            {
+                x.UserId,
+                x.CategoryId,
+                x.Currency
+            })
+            .IsUnique()
+            .HasFilter("\"HouseholdId\" IS NULL");
+
+            entity.HasOne<Household>()
+                .WithMany()
+                .HasForeignKey(x => x.HouseholdId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(x => new
+            {
+                x.HouseholdId,
+                x.CategoryId,
+                x.Currency
+            })
+            .IsUnique()
+            .HasFilter("\"HouseholdId\" IS NOT NULL");
+        });
+
+        modelBuilder.Entity<SavingsGoal>(entity =>
+        {
+            entity.ToTable("SavingsGoals");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Name)
+                .IsRequired()
+                .HasMaxLength(150);
+
+            entity.Property(x => x.Currency)
+                .IsRequired()
+                .HasMaxLength(3);
+
+            entity.Property(x => x.TargetAmount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.TargetDateUtc)
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.CreatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.UpdatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(x => new { x.UserId, x.CreatedAtUtc });
+        });
+
+        modelBuilder.Entity<SavingsGoalContribution>(entity =>
+        {
+            entity.ToTable("SavingsGoalContributions");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Amount)
+                .HasPrecision(18, 2)
+                .IsRequired();
+
+            entity.Property(x => x.ContributionDateUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.Note)
+                .HasMaxLength(250);
+
+            entity.Property(x => x.CreatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<SavingsGoal>()
+                .WithMany()
+                .HasForeignKey(x => x.SavingsGoalId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(x => new
+            {
+                x.UserId,
+                x.SavingsGoalId,
+                x.ContributionDateUtc
+            });
         });
     }
 }

@@ -21,9 +21,18 @@ public class TransactionCategoryRepository
         Guid userId,
         CancellationToken ct = default)
     {
-        return await _context.TransactionCategories
+        var householdIds = await _context.HouseholdMembers
             .AsNoTracking()
             .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+        var memberIds = _context.HouseholdMembers
+            .Where(x => householdIds.Contains(x.HouseholdId))
+            .Select(x => x.UserId);
+
+        return await _context.TransactionCategories
+            .AsNoTracking()
+            .Where(x => x.UserId == userId || memberIds.Contains(x.UserId))
             .OrderBy(x => x.Type)
             .ThenBy(x => x.Name)
             .ToListAsync(ct);
@@ -34,9 +43,19 @@ public class TransactionCategoryRepository
         Guid userId,
         CancellationToken ct = default)
     {
+        var householdIds = await _context.HouseholdMembers
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+        var memberIds = _context.HouseholdMembers
+            .Where(x => householdIds.Contains(x.HouseholdId))
+            .Select(x => x.UserId);
+
         return await _context.TransactionCategories
             .FirstOrDefaultAsync(
-                x => x.Id == id && x.UserId == userId,
+                x => x.Id == id &&
+                     (x.UserId == userId || memberIds.Contains(x.UserId)),
                 ct);
     }
 
@@ -65,16 +84,14 @@ public class TransactionCategoryRepository
     {
         var usedInTransactions =
             await _context.FinancialTransactions.AnyAsync(
-                x => x.UserId == userId &&
-                     x.CategoryId == categoryId,
+                x => x.CategoryId == categoryId,
                 ct);
 
         if (usedInTransactions)
             return true;
 
         return await _context.RecurringTransactions.AnyAsync(
-            x => x.UserId == userId &&
-                 x.CategoryId == categoryId,
+            x => x.CategoryId == categoryId,
             ct);
     }
 

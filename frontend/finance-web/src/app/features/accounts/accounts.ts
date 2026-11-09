@@ -59,4 +59,20 @@ export class Accounts {
       `${this.apiUrl}/${id}`
     );
   }
+
+  shareAccount(
+    id: string,
+    householdId: string
+  ): Observable<FinancialAccount> {
+    return this.http.post<FinancialAccount>(
+      `${this.apiUrl}/${id}/share`,
+      { householdId }
+    );
+  }
+
+  unshareAccount(id: string): Observable<FinancialAccount> {
+    return this.http.delete<FinancialAccount>(
+      `${this.apiUrl}/${id}/share`
+    );
+  }
 }

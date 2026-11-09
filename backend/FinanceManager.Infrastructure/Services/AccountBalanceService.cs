@@ -20,15 +20,30 @@ public class AccountBalanceService : IAccountBalanceService
         Guid userId,
         CancellationToken ct = default)
     {
-        var accounts = await _context.FinancialAccounts
+        var nowUtc = DateTime.UtcNow;
+        var householdIds = await _context.HouseholdMembers
             .AsNoTracking()
             .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+
+        var accounts = await _context.FinancialAccounts
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == userId ||
+                (x.HouseholdId.HasValue &&
+                 householdIds.Contains(x.HouseholdId.Value)))
             .OrderBy(x => x.Name)
             .ToListAsync(ct);
 
+        var accountIds = accounts.Select(x => x.Id).ToArray();
         var transactions = await _context.FinancialTransactions
             .AsNoTracking()
-            .Where(x => x.UserId == userId)
+            .Where(x =>
+                (accountIds.Contains(x.FinancialAccountId) ||
+                 (x.DestinationAccountId.HasValue &&
+                  accountIds.Contains(x.DestinationAccountId.Value))) &&
+                x.TransactionDateUtc <= nowUtc)
             .ToListAsync(ct);
 
         return accounts.Select(account =>
@@ -44,18 +59,28 @@ public class AccountBalanceService : IAccountBalanceService
         Guid userId,
         CancellationToken ct = default)
     {
+        var householdIds = await _context.HouseholdMembers
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+
         var account = await _context.FinancialAccounts
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                x => x.Id == accountId && x.UserId == userId,
+                x => x.Id == accountId &&
+                     (x.UserId == userId ||
+                      (x.HouseholdId.HasValue &&
+                       householdIds.Contains(x.HouseholdId.Value))),
                 ct);
 
         if (account is null)
             return null;
 
+        var nowUtc = DateTime.UtcNow;
         var transactions = await _context.FinancialTransactions
             .AsNoTracking()
-            .Where(x => x.UserId == userId &&
+            .Where(x => x.TransactionDateUtc <= nowUtc &&
                 (x.FinancialAccountId == accountId ||
                  x.DestinationAccountId == accountId))
             .ToListAsync(ct);

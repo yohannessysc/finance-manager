@@ -21,9 +21,24 @@ public class FinancialTransactionRepository
         Guid userId,
         CancellationToken ct = default)
     {
-        return await _context.FinancialTransactions
+        var householdIds = await _context.HouseholdMembers
             .AsNoTracking()
             .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+        var accountIds = _context.FinancialAccounts
+            .Where(x =>
+                x.UserId == userId ||
+                (x.HouseholdId.HasValue &&
+                 householdIds.Contains(x.HouseholdId.Value)))
+            .Select(x => x.Id);
+
+        return await _context.FinancialTransactions
+            .AsNoTracking()
+            .Where(x =>
+                accountIds.Contains(x.FinancialAccountId) ||
+                (x.DestinationAccountId.HasValue &&
+                 accountIds.Contains(x.DestinationAccountId.Value)))
             .OrderByDescending(x => x.TransactionDateUtc)
             .ThenByDescending(x => x.CreatedAtUtc)
             .ToListAsync(ct);
@@ -34,9 +49,24 @@ public class FinancialTransactionRepository
         Guid userId,
         CancellationToken ct = default)
     {
+        var householdIds = await _context.HouseholdMembers
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+        var accountIds = _context.FinancialAccounts
+            .Where(x =>
+                x.UserId == userId ||
+                (x.HouseholdId.HasValue &&
+                 householdIds.Contains(x.HouseholdId.Value)))
+            .Select(x => x.Id);
+
         return await _context.FinancialTransactions
             .FirstOrDefaultAsync(
-                x => x.Id == id && x.UserId == userId,
+                x => x.Id == id &&
+                     (accountIds.Contains(x.FinancialAccountId) ||
+                      (x.DestinationAccountId.HasValue &&
+                       accountIds.Contains(x.DestinationAccountId.Value))),
                 ct);
     }
 
@@ -45,10 +75,19 @@ public class FinancialTransactionRepository
         Guid userId,
         CancellationToken ct = default)
     {
+        var householdIds = await _context.HouseholdMembers
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+
         return await _context.FinancialAccounts
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                x => x.Id == accountId && x.UserId == userId,
+                x => x.Id == accountId &&
+                     (x.UserId == userId ||
+                      (x.HouseholdId.HasValue &&
+                       householdIds.Contains(x.HouseholdId.Value))),
                 ct);
     }
 
@@ -57,10 +96,78 @@ public class FinancialTransactionRepository
         Guid userId,
         CancellationToken ct = default)
     {
+        var householdIds = await _context.HouseholdMembers
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+        var householdMemberIds = _context.HouseholdMembers
+            .Where(x => householdIds.Contains(x.HouseholdId))
+            .Select(x => x.UserId);
+
         return await _context.TransactionCategories
             .AsNoTracking()
             .FirstOrDefaultAsync(
-                x => x.Id == categoryId && x.UserId == userId,
+                x => x.Id == categoryId &&
+                     (x.UserId == userId ||
+                      householdMemberIds.Contains(x.UserId)),
+                ct);
+    }
+
+    public async Task<bool> CanEditAccountAsync(
+        Guid accountId,
+        Guid userId,
+        CancellationToken ct = default)
+    {
+        var account = await _context.FinancialAccounts
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == accountId, ct);
+        if (account is null)
+            return false;
+        if (account.UserId == userId)
+            return true;
+        if (account.HouseholdId is null)
+            return false;
+
+        return await _context.HouseholdMembers
+            .AsNoTracking()
+            .AnyAsync(
+                x => x.HouseholdId == account.HouseholdId &&
+                     x.UserId == userId &&
+                     (x.Role == FinanceManager.Domain.Enums.HouseholdRole.Owner ||
+                      x.Role == FinanceManager.Domain.Enums.HouseholdRole.Admin ||
+                      x.Role == FinanceManager.Domain.Enums.HouseholdRole.Editor),
+                ct);
+    }
+
+    public async Task<bool> CanEditTransactionAsync(
+        Guid transactionId,
+        Guid userId,
+        CancellationToken ct = default)
+    {
+        var account = await (
+            from transaction in _context.FinancialTransactions.AsNoTracking()
+            join financialAccount in _context.FinancialAccounts.AsNoTracking()
+                on transaction.FinancialAccountId equals financialAccount.Id
+            where transaction.Id == transactionId
+            select financialAccount)
+            .SingleOrDefaultAsync(ct);
+
+        if (account is null)
+            return false;
+        if (account.UserId == userId)
+            return true;
+        if (account.HouseholdId is null)
+            return false;
+
+        return await _context.HouseholdMembers
+            .AsNoTracking()
+            .AnyAsync(
+                x => x.HouseholdId == account.HouseholdId &&
+                     x.UserId == userId &&
+                     (x.Role == FinanceManager.Domain.Enums.HouseholdRole.Owner ||
+                      x.Role == FinanceManager.Domain.Enums.HouseholdRole.Admin ||
+                      x.Role == FinanceManager.Domain.Enums.HouseholdRole.Editor),
                 ct);
     }
 

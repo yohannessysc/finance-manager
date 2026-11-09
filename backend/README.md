@@ -1289,12 +1289,20 @@ All endpoints will use the base path:
 
 ## Households
 
-| Method | Endpoint                   | Description      |
-| ------ | -------------------------- | ---------------- |
-| GET    | `/households`              | Get households   |
-| POST   | `/households`              | Create household |
-| GET    | `/households/{id}`         | Get household    |
-| POST   | `/households/{id}/invites` | Invite member    |
+| Method | Endpoint                                     | Description                 |
+| ------ | -------------------------------------------- | --------------------------- |
+| GET    | `/households`                                | List joined households      |
+| POST   | `/households`                                | Create household            |
+| POST   | `/households/{householdId}/invitations`      | Invite a member by email    |
+| POST   | `/households/invitations/accept`             | Accept an invitation        |
+| PUT    | `/households/{householdId}/members/{userId}/role` | Update a member's role |
+| DELETE | `/households/{householdId}/members/{userId}`  | Remove a member              |
+
+Household roles are Owner, Admin, Editor, and Viewer. Owners and admins can
+manage members; only the owner can assign admins. Editors can modify shared
+activity, while viewers are read-only. Accounts remain private unless their
+owner explicitly shares them with one of their households. Owners can remove
+that access with `DELETE /accounts/{id}/share`.
 
 ## Financial Accounts
 
@@ -1304,6 +1312,9 @@ All endpoints will use the base path:
 | POST   | `/accounts`      | Create account |
 | GET    | `/accounts/{id}` | Get account    |
 | PUT    | `/accounts/{id}` | Update account |
+| DELETE | `/accounts/{id}` | Delete account |
+| POST   | `/accounts/{id}/share` | Share an owned account with a household |
+| DELETE | `/accounts/{id}/share` | Make an owned account private |
 
 ## Transactions
 
@@ -1314,6 +1325,15 @@ All endpoints will use the base path:
 | GET    | `/transactions/{id}` | Get transaction           |
 | PUT    | `/transactions/{id}` | Update transaction        |
 | DELETE | `/transactions/{id}` | Delete transaction        |
+| POST   | `/transactions/import/csv` | Import CSV transactions |
+| GET    | `/transactions/import/csv/template` | Download CSV template |
+
+CSV import accepts up to 5 MB and 5,000 rows. Required columns are `date`,
+`description`, `amount`, and `account`; optional columns are `currency`, `type`,
+`category`, and `merchant`. Dates without a time zone use the user's saved
+time zone. If `type` is omitted, positive amounts are income and negative
+amounts are expenses. Imported rows are checked against existing activity and
+an idempotency fingerprint prevents repeat imports.
 
 ## Budgets
 
@@ -1324,21 +1344,30 @@ All endpoints will use the base path:
 | PUT    | `/budgets/{id}` | Update budget |
 | DELETE | `/budgets/{id}` | Delete budget |
 
+Budgets are private unless a `householdId` is supplied when creating a
+household budget. Household budgets aggregate expenses only from accounts
+explicitly shared with that household. Responses include `canEdit`,
+`periodStartDate`, and inclusive `periodEndDate`; household cycles use the
+owner's saved budget preferences.
+
 ## Savings Goals
 
 | Method | Endpoint                    | Description      |
 | ------ | --------------------------- | ---------------- |
-| GET    | `/goals`                    | List goals       |
-| POST   | `/goals`                    | Create goal      |
-| GET    | `/goals/{id}`               | Get goal         |
-| PUT    | `/goals/{id}`               | Update goal      |
-| POST   | `/goals/{id}/contributions` | Add contribution |
+| GET    | `/savings-goals`                    | List goals       |
+| POST   | `/savings-goals`                    | Create goal      |
+| PUT    | `/savings-goals/{id}`               | Update goal      |
+| DELETE | `/savings-goals/{id}`               | Delete goal      |
+| GET    | `/savings-goals/{id}/contributions` | List contributions |
+| POST   | `/savings-goals/{id}/contributions` | Add contribution |
+| DELETE | `/savings-goals/{id}/contributions/{contributionId}` | Remove contribution |
 
 ## Dashboard and Planning
 
 | Method | Endpoint                 | Description        |
 | ------ | ------------------------ | ------------------ |
 | GET    | `/dashboard/summary`     | Summary            |
+| GET    | `/dashboard/forecast?days=30` | Cash-flow forecast (1–365 days) |
 | GET    | `/reports/cash-flow`     | Cash flow report   |
 | GET    | `/reports/spending`      | Spending report    |
 | POST   | `/projections/cash-flow` | Financial scenario |
@@ -1835,6 +1864,13 @@ Never store:
 
 Users should have explicit control over personal versus shared financial information.
 
+Account email changes remain pending until the new address confirms the
+Identity token. Confirmation revokes all active sessions. Authenticated users
+can download a no-cache JSON export of their profile, preferences, accounts,
+categories, transactions, and recurring transactions. Account deletion requires
+the current password and an explicit confirmation phrase, then removes the
+user's financial records and account data in a database transaction.
+
 ---
 
 # 20. Testing Strategy
@@ -1877,7 +1913,23 @@ Test:
 - Error states
 - Loading states
 
-## 20.4 Example Test Scenarios
+## 20.4 Automated CI
+
+The GitHub Actions workflow at `.github/workflows/ci.yml` runs on pushes and
+pull requests. It restores and tests the .NET solution and runs the Angular
+tests and production build.
+
+Run the same checks locally from the repository root:
+
+```bash
+dotnet test backend/FinanceManager.slnx --configuration Release
+cd frontend/finance-web
+npm ci
+npm test -- --watch=false
+npm run build
+```
+
+## 20.5 Example Test Scenarios
 
 | Scenario                        | Expected Result                             |
 | ------------------------------- | ------------------------------------------- |

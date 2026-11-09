@@ -11,6 +11,7 @@ using FinanceManager.Infrastructure.Persistence;
 using FinanceManager.Infrastructure.Repositories;
 using FinanceManager.Infrastructure.Services;
 
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -94,8 +95,88 @@ builder.Services.ConfigureApplicationCookie(options =>
             ? CookieSecurePolicy.SameAsRequest
             : CookieSecurePolicy.Always;
 
-    options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
+    options.ExpireTimeSpan = UserSessionService.Lifetime;
     options.SlidingExpiration = false;
+
+    // Keep Identity's security-stamp validation, then also require
+    // an active server-side session that matches the cookie.
+    var validateSecurityStamp = options.Events.OnValidatePrincipal;
+
+    options.Events.OnValidatePrincipal = async context =>
+    {
+        var logger = context.HttpContext.RequestServices
+            .GetRequiredService<ILogger<Program>>();
+
+        var path = context.HttpContext.Request.Path;
+        logger.LogInformation(
+            "OnValidatePrincipal START: path={path}, method={method}",
+            path,
+            context.HttpContext.Request.Method);
+
+        await validateSecurityStamp(context);
+
+        if (context.Principal is null)
+        {
+            logger.LogWarning(
+                "OnValidatePrincipal: Principal is null after security-stamp validation");
+            return;
+        }
+
+        logger.LogInformation(
+            "OnValidatePrincipal: Principal has {claimCount} claims",
+            context.Principal.Claims.Count());
+
+        var sessionClaim = context.Principal
+            .FindFirst(UserSessionService.SessionClaimType)?.Value;
+
+        var userClaim = context.Principal
+            .FindFirst(System.Security.Claims.ClaimTypes
+                .NameIdentifier)?.Value;
+
+        logger.LogInformation(
+            "OnValidatePrincipal: sessionClaim={sessionClaim}, userClaim={userClaim}",
+            sessionClaim ?? "(null)",
+            userClaim ?? "(null)");
+
+        var valid = false;
+
+        if (Guid.TryParse(sessionClaim, out var sessionId) &&
+            Guid.TryParse(userClaim, out var userId))
+        {
+            var sessions = context.HttpContext.RequestServices
+                .GetRequiredService<UserSessionService>();
+
+            valid = await sessions.ValidateAsync(
+                sessionId,
+                userId,
+                context.HttpContext.RequestAborted);
+
+            logger.LogInformation(
+                "OnValidatePrincipal: ValidateAsync returned {valid}",
+                valid);
+        }
+        else
+        {
+            logger.LogWarning(
+                "OnValidatePrincipal: Failed to parse session/user GUIDs");
+        }
+
+        if (!valid)
+        {
+            logger.LogWarning(
+                "OnValidatePrincipal: Session validation failed, rejecting principal");
+
+            context.RejectPrincipal();
+
+            await context.HttpContext.SignOutAsync(
+                IdentityConstants.ApplicationScheme);
+        }
+        else
+        {
+            logger.LogInformation(
+                "OnValidatePrincipal: Session validation PASSED");
+        }
+    };
 
     options.Events.OnRedirectToLogin = context =>
     {
@@ -228,6 +309,10 @@ builder.Services.AddScoped<
     IFinancialTransactionService,
     FinancialTransactionService>();
 
+builder.Services.AddScoped<
+    ICsvTransactionImportService,
+    CsvTransactionImportService>();
+
 // Recurring transactions
 builder.Services.AddScoped<
     IRecurringTransactionRepository,
@@ -260,8 +345,27 @@ builder.Services.AddScoped<
     IDashboardService,
     DashboardService>();
 
+builder.Services.AddScoped<
+    IBudgetService,
+    BudgetService>();
+
+builder.Services.AddScoped<
+    ISavingsGoalService,
+    SavingsGoalService>();
+
+builder.Services.AddScoped<
+    IHouseholdAuthorizationService,
+    HouseholdAuthorizationService>();
+
+builder.Services.AddScoped<
+    IHouseholdService,
+    HouseholdService>();
+
 // Default categories for new users
 builder.Services.AddScoped<DefaultCategorySeeder>();
+
+// Server-side login sessions
+builder.Services.AddScoped<UserSessionService>();
 
 // ---------------------------------------
 // 10. Real Email Delivery — Resend

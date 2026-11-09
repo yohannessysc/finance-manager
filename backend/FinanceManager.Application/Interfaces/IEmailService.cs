@@ -12,4 +12,15 @@ public interface IEmailService
         string email,
         string resetUrl,
         CancellationToken ct = default);
+
+    Task SendEmailChangeAsync(
+        string email,
+        string confirmationUrl,
+        CancellationToken ct = default);
+
+    Task SendHouseholdInvitationAsync(
+        string email,
+        string householdName,
+        string invitationUrl,
+        CancellationToken ct = default);
 }

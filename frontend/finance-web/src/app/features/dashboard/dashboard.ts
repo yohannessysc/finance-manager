@@ -6,7 +6,9 @@ import { RouterLink } from '@angular/router';
 import { DashboardService } from './dashboard.service';
 import {
   AccountBalance,
+  CashFlowForecast,
   DashboardSummary,
+  ForecastCurrency,
   MonthlyCashFlow,
   RecentTransaction
 } from './dashboard.model';
@@ -24,6 +26,9 @@ export class Dashboard implements OnInit {
   readonly loading = signal(true);
   readonly error = signal('');
   readonly data = signal<DashboardSummary | null>(null);
+  readonly forecastData = signal<CashFlowForecast | null>(null);
+  readonly forecastLoading = signal(true);
+  readonly forecastError = signal('');
   readonly selectedCurrency = signal('CAD');
 
   readonly currencies = computed(() => {
@@ -33,7 +38,8 @@ export class Dashboard implements OnInit {
 
     const found = [
       ...summary.accounts.map(x => x.currency),
-      ...summary.monthlyCashFlow.map(x => x.currency)
+      ...summary.monthlyCashFlow.map(x => x.currency),
+      ...(this.forecastData()?.currencies.map(x => x.currency) ?? [])
     ];
 
     return [...new Set(found)].sort();
@@ -89,6 +95,35 @@ export class Dashboard implements OnInit {
     ) ?? []
   );
 
+  readonly forecast = computed<ForecastCurrency | null>(() =>
+    this.forecastData()?.currencies.find(
+      x => x.currency === this.selectedCurrency()
+    ) ?? null
+  );
+
+  readonly forecastDays = computed(() => this.forecast()?.days ?? []);
+
+  readonly forecastMax = computed(() =>
+    Math.max(
+      1,
+      ...this.forecastDays().map(x => Math.abs(x.netCashFlow))
+    )
+  );
+
+  readonly forecastIncome = computed(() =>
+    this.forecastDays().reduce(
+      (total, day) => total + day.expectedIncome,
+      0
+    )
+  );
+
+  readonly forecastExpenses = computed(() =>
+    this.forecastDays().reduce(
+      (total, day) => total + day.expectedExpenses,
+      0
+    )
+  );
+
   readonly chartMax = computed(() => {
     const trend = this.monthlyTrend();
 
@@ -107,6 +142,8 @@ export class Dashboard implements OnInit {
   loadDashboard(): void {
     this.loading.set(true);
     this.error.set('');
+    this.forecastLoading.set(true);
+    this.forecastError.set('');
 
     this.dashboardService.getSummary().subscribe({
       next: summary => {
@@ -134,6 +171,27 @@ export class Dashboard implements OnInit {
         this.loading.set(false);
       }
     });
+
+    this.dashboardService.getForecast().subscribe({
+      next: forecast => {
+        this.forecastData.set(forecast);
+        this.forecastLoading.set(false);
+
+        const available = forecast.currencies.map(x => x.currency);
+        if (
+          available.length &&
+          !available.includes(this.selectedCurrency())
+        ) {
+          this.selectedCurrency.set(available[0]);
+        }
+      },
+      error: () => {
+        this.forecastError.set(
+          'Could not load your cash-flow forecast.'
+        );
+        this.forecastLoading.set(false);
+      }
+    });
   }
 
   setCurrency(currency: string): void {
@@ -142,6 +200,24 @@ export class Dashboard implements OnInit {
 
   barHeight(amount: number): number {
     return Math.max(0, (amount / this.chartMax()) * 100);
+  }
+
+  forecastBarHeight(amount: number): number {
+    return Math.max(2, (Math.abs(amount) / this.forecastMax()) * 100);
+  }
+
+  forecastDayLabel(date: string): string {
+    return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+      day: 'numeric'
+    });
+  }
+
+  forecastDayTitle(date: string, netCashFlow: number): string {
+    const label = new Date(`${date}T00:00:00`).toLocaleDateString(
+      undefined,
+      { month: 'short', day: 'numeric' }
+    );
+    return `${label}: ${netCashFlow.toFixed(2)} ${this.selectedCurrency()}`;
   }
 
   monthLabel(month: number): string {

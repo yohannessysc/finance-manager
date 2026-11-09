@@ -59,3 +59,25 @@ export interface DashboardSummary {
   recentTransactions: RecentTransaction[];
   upcomingRecurring: UpcomingRecurring[];
 }
+
+export interface ForecastDay {
+  date: string;
+  expectedIncome: number;
+  expectedExpenses: number;
+  netCashFlow: number;
+  projectedBalance: number;
+  plannedItems: number;
+}
+
+export interface ForecastCurrency {
+  currency: string;
+  startingBalance: number;
+  projectedEndingBalance: number;
+  days: ForecastDay[];
+}
+
+export interface CashFlowForecast {
+  horizonDays: number;
+  forecastedAtUtc: string;
+  currencies: ForecastCurrency[];
+}

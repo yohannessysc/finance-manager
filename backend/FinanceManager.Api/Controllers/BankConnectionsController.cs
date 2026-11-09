@@ -279,25 +279,32 @@ public class BankConnectionsController : ControllerBase
                 connectionId,
                 parsedUserId);
 
-            var syncLog = await _bankConnectionService.SyncConnectionAsync(connectionId, parsedUserId);
-            if (syncLog == null)
+            // Verify the connection belongs to the user
+            var connection = await _bankConnectionService.GetConnectionAsync(connectionId, parsedUserId);
+            if (connection == null)
             {
                 return NotFound();
             }
+
+            // Actually perform the sync
+            var syncLog = await _bankSyncService.SyncTransactionsAsync(connectionId);
 
             return Ok(new
             {
                 syncId = syncLog.Id,
                 status = syncLog.Status,
+                transactionsRetrieved = syncLog.TransactionsRetrieved,
                 transactionsImported = syncLog.TransactionsImported,
                 duplicatesSkipped = syncLog.DuplicatesSkipped,
-                message = "Sync initiated"
+                errorCount = syncLog.ErrorCount,
+                completedAt = syncLog.CompletedAtUtc,
+                message = "Sync completed"
             });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to sync connection {ConnectionId} for user {UserId}", connectionId, parsedUserId);
-            return BadRequest(new { error = "Failed to sync connection" });
+            return BadRequest(new { error = "Failed to sync connection", details = ex.Message });
         }
     }
 }

@@ -368,6 +368,13 @@ builder.Services.AddScoped<DefaultCategorySeeder>();
 builder.Services.AddScoped<UserSessionService>();
 
 // Bank integration services
+builder.Services.Configure<FinanceManager.Infrastructure.Services.Plaid.PlaidOptions>(
+    builder.Configuration.GetSection(
+        FinanceManager.Infrastructure.Services.Plaid.PlaidOptions.SectionName));
+
+builder.Services.AddHttpClient<FinanceManager.Infrastructure.Services.Plaid.IPlaidService,
+    FinanceManager.Infrastructure.Services.Plaid.PlaidService>();
+
 builder.Services.AddScoped<IBankConnectionService, BankConnectionService>();
 builder.Services.AddScoped<IBankSyncService, BankSyncService>();
 builder.Services.AddScoped<ICategoryRuleService, CategoryRuleService>();

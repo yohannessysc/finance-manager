@@ -2,25 +2,28 @@ using FinanceManager.Application.DTOs.Bank;
 using FinanceManager.Application.Interfaces;
 using FinanceManager.Domain.Entities;
 using FinanceManager.Infrastructure.Persistence;
+using FinanceManager.Infrastructure.Services.Plaid;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace FinanceManager.Infrastructure.Services;
 
 /// <summary>
-/// Service for managing bank connections
-/// TODO: Integrate with Plaid SDK when library is added
+/// Service for managing bank connections using Plaid SDK
 /// </summary>
 public class BankConnectionService : IBankConnectionService
 {
     private readonly FinanceDbContext _dbContext;
+    private readonly IPlaidService _plaidService;
     private readonly ILogger<BankConnectionService> _logger;
 
     public BankConnectionService(
         FinanceDbContext dbContext,
+        IPlaidService plaidService,
         ILogger<BankConnectionService> logger)
     {
         _dbContext = dbContext;
+        _plaidService = plaidService;
         _logger = logger;
     }
 
@@ -28,48 +31,74 @@ public class BankConnectionService : IBankConnectionService
         Guid userId,
         CreatePlaidLinkRequest request)
     {
-        // TODO: Call Plaid SDK to create link token
-        // For now, return a placeholder response
-        _logger.LogInformation("CreatePlaidLinkToken called for user {UserId}", userId);
+        _logger.LogInformation("Creating Plaid Link token for user {UserId}", userId);
 
-        var response = new PlaidLinkTokenResponse
+        try
         {
-            LinkToken = $"link-{Guid.NewGuid().ToString().Substring(0, 8)}",
-            ExpiresAtUtc = DateTime.UtcNow.AddMinutes(10),
-            RequestId = Guid.NewGuid().ToString()
-        };
+            var result = await _plaidService.CreateLinkTokenAsync(
+                userId.ToString(),
+                request.UserEmail,
+                request.UserFullName,
+                countryCodes: new[] { "CA" }); // Canadian banks
 
-        return await Task.FromResult(response);
+            return new PlaidLinkTokenResponse
+            {
+                LinkToken = result.LinkToken,
+                ExpiresAtUtc = result.ExpiresAtUtc,
+                RequestId = result.RequestId
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create Plaid Link token for user {UserId}", userId);
+            throw;
+        }
     }
 
     public async Task<BankConnectionResponse> ExchangePlaidTokenAsync(
         Guid userId,
         ExchangePlaidTokenRequest request)
     {
-        // TODO: Call Plaid SDK to exchange token
-        // For now, save a placeholder connection
         _logger.LogInformation(
-            "ExchangePlaidToken called for user {UserId}, institution {Institution}",
+            "Exchanging Plaid token for user {UserId}, institution {Institution}",
             userId,
             request.Metadata?.InstitutionName);
 
-        var connection = new BankConnection
+        try
         {
-            UserId = userId,
-            FinancialAccountId = request.FinancialAccountId,
-            BankProvider = "Plaid",
-            InstitutionName = request.Metadata?.InstitutionName ?? "Unknown",
-            InstitutionId = request.Metadata?.InstitutionId ?? "",
-            PlaidItemId = Guid.NewGuid().ToString(),
-            Status = 1, // Connected
-            ConnectedAtUtc = DateTime.UtcNow,
-            ExpiresAtUtc = DateTime.UtcNow.AddYears(1)
-        };
+            // Exchange public token for access token
+            var tokenResult = await _plaidService.ExchangePublicTokenAsync(request.PublicToken);
 
-        _dbContext.BankConnections.Add(connection);
-        await _dbContext.SaveChangesAsync();
+            // Save connection to database
+            var connection = new BankConnection
+            {
+                UserId = userId,
+                FinancialAccountId = request.FinancialAccountId,
+                BankProvider = "Plaid",
+                InstitutionName = request.Metadata?.InstitutionName ?? "Unknown",
+                InstitutionId = request.Metadata?.InstitutionId ?? "",
+                PlaidItemId = tokenResult.ItemId,
+                PlaidAccessToken = tokenResult.AccessToken, // Store securely in production
+                Status = 1, // Connected
+                ConnectedAtUtc = DateTime.UtcNow,
+                ExpiresAtUtc = DateTime.UtcNow.AddYears(1) // Plaid items expire after 1 year
+            };
 
-        return MapToResponse(connection, 0);
+            _dbContext.BankConnections.Add(connection);
+            await _dbContext.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "Successfully exchanged Plaid token and saved connection {ConnectionId} for user {UserId}",
+                connection.Id,
+                userId);
+
+            return MapToResponse(connection, 0);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to exchange Plaid token for user {UserId}", userId);
+            throw;
+        }
     }
 
     public async Task<IEnumerable<BankConnectionResponse>> GetUserConnectionsAsync(Guid userId)

@@ -51,6 +51,7 @@ export const routes: Routes = [
       { path: 'savings-goals', component: SavingsGoals },
       { path: 'households', component: Households },
       { path: 'households/accept', component: AcceptHouseholdInvitation },
+      { path: 'bank-connections', loadChildren: () => import('./features/bank-connections/bank-connections.routes').then(m => m.BANK_CONNECTIONS_ROUTES) },
       { path: 'settings', component: Settings }
     ]
   },

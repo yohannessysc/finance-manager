@@ -1,0 +1,189 @@
+:host {
+  display: block;
+  color: var(--fm-text);
+}
+
+.households-page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.page-heading,
+.household-card > header,
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-heading {
+  margin-bottom: 20px;
+}
+
+.eyebrow {
+  color: var(--fm-primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+h1 {
+  margin: 8px 0;
+  font-size: 32px;
+}
+
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+p,
+.member-row span {
+  color: var(--fm-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.privacy-note,
+.household-card,
+.create-card {
+  margin-bottom: 16px;
+  padding: 20px;
+  border: 1px solid var(--fm-border);
+  border-radius: 14px;
+  background: var(--fm-surface);
+}
+
+.privacy-note {
+  background: var(--fm-primary-soft);
+  color: var(--fm-text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.household-card > header h2,
+.create-card h2 {
+  font-size: 18px;
+}
+
+.role-badge {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--fm-hover);
+  color: var(--fm-muted);
+  font-size: 11px;
+}
+
+.members {
+  margin-top: 20px;
+}
+
+.members h3,
+.invite-form h3 {
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.member-row {
+  min-height: 54px;
+  border-top: 1px solid var(--fm-border);
+}
+
+.member-row > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.member-row select,
+.invite-form input,
+.invite-form select,
+.create-card input {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--fm-border);
+  border-radius: 8px;
+  background: var(--fm-background);
+  color: var(--fm-text);
+}
+
+.invite-form,
+.create-card form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.invite-form h3 {
+  width: 100%;
+}
+
+.invite-form label,
+.create-card label {
+  display: grid;
+  flex: 1 1 190px;
+  gap: 6px;
+}
+
+label span {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.primary-button,
+.outline-button,
+.text-button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-button {
+  border: 0;
+  background: var(--fm-primary);
+  color: white;
+}
+
+.outline-button {
+  border: 1px solid var(--fm-border);
+  background: transparent;
+  color: var(--fm-text);
+}
+
+.text-button {
+  border: 0;
+  background: transparent;
+}
+
+.danger-text,
+.error-message {
+  color: #b42318;
+}
+
+.success-message {
+  color: var(--fm-primary);
+}
+
+.state-message {
+  padding: 20px;
+}
+
+@media (max-width: 600px) {
+  .page-heading,
+  .member-row {
+    align-items: flex-start;
+  }
+
+  .member-row {
+    flex-wrap: wrap;
+    padding: 10px 0;
+  }
+}

@@ -92,6 +92,10 @@ public class FinancialTransactionsController : ControllerBase
                 new { id = transaction.Id },
                 transaction);
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -119,6 +123,10 @@ public class FinancialTransactionsController : ControllerBase
                 ? NotFound()
                 : Ok(transaction);
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
         catch (ArgumentException ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -144,6 +152,10 @@ public class FinancialTransactionsController : ControllerBase
             return deleted
                 ? NoContent()
                 : NotFound();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
         catch (ArgumentException ex)
         {

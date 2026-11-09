@@ -17,6 +17,7 @@ public class FinancialTransaction
 
     public Guid? RecurringTransactionId { get; set; }
     public DateTime? ScheduledOccurrenceUtc { get; set; }
+    public string? ImportFingerprint { get; set; }
     public TransactionType Type { get; set; }
 
     public decimal Amount { get; set; }

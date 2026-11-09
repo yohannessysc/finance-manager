@@ -1,44 +1,148 @@
 <section class="settings-page">
   <header class="page-heading">
-    <span class="eyebrow">PERSONAL PREFERENCES</span>
+    <span class="eyebrow">ACCOUNT & PREFERENCES</span>
     <h1>Settings</h1>
-    <p>Manage your profile, appearance and account security.</p>
+    <p>Manage your account, security and appearance.</p>
   </header>
 
   <div class="settings-grid">
+    <!-- PROFILE -->
     <section class="settings-card">
       <div class="card-heading">
         <div class="heading-icon" aria-hidden="true">◉</div>
         <div>
           <h2>My profile</h2>
-          <p>Your Finance Manager account details</p>
+          <p>Manage your personal information</p>
         </div>
       </div>
 
-      <div class="detail-row">
-        <span>Full name</span>
-        <strong>{{ fullName() }}</strong>
-      </div>
+      @if (loadingProfile()) {
+        <p class="supporting-note" role="status">Loading profile...</p>
+      } @else {
+        @if (profileError()) {
+          <p class="dialog-error" role="alert">
+            {{ profileError() }}
+          </p>
+        }
 
-      <div class="detail-row">
-        <span>Email address</span>
-        <strong>
-          {{ auth.currentUser()?.email || 'Not available' }}
-        </strong>
-      </div>
+        @if (profileMessage()) {
+          <p class="profile-success" role="status">
+            {{ profileMessage() }}
+          </p>
+        }
 
-      <p class="supporting-note">
-        Profile editing and verified email changes will be implemented with the account-management
-        API.
-      </p>
+        @if (profile()) {
+          <form [formGroup]="profileForm" (ngSubmit)="saveProfile()">
+            <label class="settings-field">
+              <span>First name</span>
+              <input
+                type="text"
+                formControlName="firstName"
+                maxlength="100"
+                autocomplete="given-name"
+              />
+            </label>
+
+            <label class="settings-field">
+              <span>Last name</span>
+              <input
+                type="text"
+                formControlName="lastName"
+                maxlength="100"
+                autocomplete="family-name"
+              />
+            </label>
+
+            @if (
+              (profileForm.controls.firstName.invalid && profileForm.controls.firstName.touched) ||
+              (profileForm.controls.lastName.invalid && profileForm.controls.lastName.touched)
+            ) {
+              <p class="field-help error-text">Both names are required (maximum 100 characters).</p>
+            }
+
+            <div class="detail-row">
+              <span>Email address</span>
+              <strong>{{ profile()?.email }}</strong>
+            </div>
+
+            <div class="detail-row">
+              <span>Email verification</span>
+              <strong>
+                {{ profile()?.emailConfirmed ? 'Verified' : 'Not verified' }}
+              </strong>
+            </div>
+
+            <div class="settings-actions">
+              <button
+                class="settings-primary-button"
+                type="submit"
+                [disabled]="savingProfile() || profileForm.invalid"
+              >
+                {{ savingProfile() ? 'Saving...' : 'Save profile' }}
+              </button>
+            </div>
+          </form>
+
+          <div class="settings-divider"></div>
+          <h3 class="appearance-subheading">Change email address</h3>
+          <p class="field-help">
+            Your current address stays active until you confirm the new one.
+            You'll be signed out on all devices after confirmation.
+          </p>
+
+          @if (emailChangeError()) {
+            <p class="dialog-error" role="alert">{{ emailChangeError() }}</p>
+          }
+
+          @if (emailChangeMessage()) {
+            <p class="profile-success" role="status">{{ emailChangeMessage() }}</p>
+          }
+
+          <form [formGroup]="emailChangeForm" (ngSubmit)="requestEmailChange()">
+            <label class="settings-field">
+              <span>New email address</span>
+              <input
+                type="email"
+                formControlName="newEmail"
+                maxlength="254"
+                autocomplete="email"
+              />
+            </label>
+
+            <label class="settings-field">
+              <span>Current password</span>
+              <input
+                type="password"
+                formControlName="currentPassword"
+                autocomplete="current-password"
+              />
+            </label>
+
+            <div class="settings-actions">
+              <button
+                class="settings-primary-button"
+                type="submit"
+                [disabled]="emailChangeBusy() || emailChangeForm.invalid"
+              >
+                {{ emailChangeBusy() ? 'Sending confirmation...' : 'Send confirmation link' }}
+              </button>
+            </div>
+          </form>
+        } @else {
+          <button type="button" class="outline-link" (click)="loadProfile()">
+            Retry loading profile
+          </button>
+        }
+      }
     </section>
 
+    <!-- APPEARANCE -->
     <section class="settings-card">
       <div class="card-heading">
         <div class="heading-icon" aria-hidden="true">◐</div>
         <div>
           <h2>Appearance</h2>
-          <p>Personalize your background and colours</p>
+          <p>Choose your display mode and accent colour</p>
         </div>
       </div>
 
@@ -53,22 +157,24 @@
             [attr.aria-pressed]="theme.preference() === option.value"
             (click)="changeTheme(option.value)"
           >
-            <span class="theme-title">{{ option.label }}</span>
+            <span class="theme-title">
+              {{ option.label }}
+            </span>
             <span class="theme-description">
               {{ option.description }}
             </span>
 
             @if (theme.preference() === option.value) {
-              <span class="selected-mark" aria-hidden="true">✓</span>
+              <span class="selected-mark" aria-hidden="true"> ✓ </span>
             }
           </button>
         }
       </div>
 
       <div class="custom-theme-section">
-        <h3>Custom accent colour</h3>
+        <h3>Accent colour</h3>
 
-        <label for="accent-select">Choose your colour</label>
+        <label for="accent-select"> Choose your colour </label>
 
         <select
           id="accent-select"
@@ -103,73 +209,350 @@
         </div>
 
         <div class="accent-preview">
-          <span>
-            {{ theme.resolvedTheme() === 'dark' ? 'Dark' : 'Light' }}
-            + {{ theme.accent() }} preview
-          </span>
-          <button type="button" disabled>Example button</button>
+          <span>Selected accent preview</span>
+          <button type="button" disabled>Preview colour</button>
         </div>
       </div>
 
       <p class="supporting-note">
-        Both settings are saved on this device. You can combine any accent colour with Light, Dark
-        or System.
+        Light, Dark and System work independently of your chosen accent colour. Preferences are
+        saved on this device.
       </p>
     </section>
 
+    <!-- SECURITY -->
     <section class="settings-card">
       <div class="card-heading">
         <div class="heading-icon" aria-hidden="true">◇</div>
         <div>
           <h2>Security</h2>
-          <p>Keep your account protected</p>
+          <p>Protect your Finance Manager account</p>
         </div>
       </div>
+
+      <h3 class="appearance-subheading">Change password</h3>
+
+      <form [formGroup]="passwordForm" (ngSubmit)="changePassword()">
+        <label class="settings-field">
+          <span>Current password</span>
+          <input
+            type="password"
+            formControlName="currentPassword"
+            autocomplete="current-password"
+          />
+        </label>
+
+        <label class="settings-field">
+          <span>New password</span>
+          <input type="password" formControlName="newPassword" autocomplete="new-password" />
+        </label>
+
+        <label class="settings-field">
+          <span>Confirm new password</span>
+          <input type="password" formControlName="confirmPassword" autocomplete="new-password" />
+        </label>
+
+        <p class="field-help">
+          Use at least 12 characters, including uppercase, lowercase, a number and a symbol.
+        </p>
+
+        @if (passwordError()) {
+          <p class="dialog-error" role="alert">
+            {{ passwordError() }}
+          </p>
+        }
+
+        <div class="settings-actions">
+          <button class="settings-primary-button" type="submit" [disabled]="changingPassword()">
+            {{ changingPassword() ? 'Updating password...' : 'Change password' }}
+          </button>
+        </div>
+      </form>
+
+      <p class="supporting-note">
+        After a successful password change, you'll be signed out and asked to log in again.
+      </p>
+
+      <div class="settings-divider"></div>
 
       <div class="security-content">
         <div>
-          <strong>Password recovery</strong>
-          <p>Reset your password using a secure email link.</p>
+          <strong>Forgot your password?</strong>
+          <p>Recover your account through email.</p>
         </div>
-
-        <a routerLink="/forgot-password" class="outline-link"> Reset password → </a>
+        <a routerLink="/forgot-password" class="outline-link"> Password recovery → </a>
       </div>
-
-      <p class="supporting-note">
-        Authenticated password changes and session management will be implemented through secure
-        account endpoints.
-      </p>
     </section>
 
+    <!-- ACTIVE SESSIONS -->
+    <section class="settings-card">
+      <div class="card-heading">
+        <div class="heading-icon" aria-hidden="true">⌘</div>
+        <div>
+          <h2>Active sessions</h2>
+          <p>Devices currently signed in to your account</p>
+        </div>
+      </div>
+
+      @if (sessionsError()) {
+        <p class="dialog-error" role="alert">
+          {{ sessionsError() }}
+        </p>
+      }
+
+      @if (sessionsMessage()) {
+        <p class="profile-success" role="status">
+          {{ sessionsMessage() }}
+        </p>
+      }
+
+      @if (loadingSessions()) {
+        <p class="supporting-note" role="status">
+          Loading your sessions...
+        </p>
+      } @else {
+        <ul class="session-list">
+          @for (item of sessions(); track item.id) {
+            <li class="session-item">
+              <div>
+                <strong>{{ item.deviceName }}</strong>
+                <p class="field-help">
+                  Signed in {{ item.createdAtUtc | date: 'medium' }}
+                  · Last active {{ item.lastSeenAtUtc | date: 'medium' }}
+                </p>
+              </div>
+
+              @if (item.isCurrent) {
+                <span class="session-badge">Current session</span>
+              } @else {
+                <button
+                  type="button"
+                  class="outline-link"
+                  [disabled]="revokingSession() === item.id"
+                  (click)="revokeSession(item)">
+                  Revoke
+                </button>
+              }
+            </li>
+          } @empty {
+            <li class="supporting-note">No active sessions found.</li>
+          }
+        </ul>
+
+        <div class="settings-actions session-actions">
+          <button
+            type="button"
+            class="outline-link"
+            [disabled]="sessionsBusy() || !hasOtherSessions()"
+            (click)="signOutOtherSessions()">
+            Sign out other devices
+          </button>
+
+          <button
+            type="button"
+            class="outline-link"
+            [disabled]="sessionsBusy()"
+            (click)="signOutEverywhere()">
+            Sign out everywhere
+          </button>
+        </div>
+      }
+    </section>
+
+    <!-- ACCOUNT AND FINANCIAL SETTINGS -->
     <section class="settings-card">
       <div class="card-heading">
         <div class="heading-icon" aria-hidden="true">▤</div>
         <div>
           <h2>Financial preferences</h2>
-          <p>Your personal finance defaults</p>
+          <p>Choose how your finances are displayed and organized</p>
         </div>
       </div>
 
-      <div class="feature-preview">
-        <div class="detail-row">
-          <span>Preferred currency</span>
-          <span>Not configured</span>
-        </div>
+      @if (loadingPreferences()) {
+        <p class="supporting-note" role="status">
+          Loading your financial preferences...
+        </p>
+      } @else {
+        @if (preferencesError()) {
+          <p class="dialog-error" role="alert">
+            {{ preferencesError() }}
+          </p>
+        }
 
-        <div class="detail-row">
-          <span>Timezone</span>
-          <span>Not configured</span>
-        </div>
+        @if (preferencesMessage()) {
+          <p class="profile-success" role="status">
+            {{ preferencesMessage() }}
+          </p>
+        }
 
-        <div class="detail-row">
-          <span>Budget start day</span>
-          <span>Not configured</span>
+        @if (preferences()) {
+          <form
+            [formGroup]="preferencesForm"
+            (ngSubmit)="savePreferences()">
+
+            <label class="settings-field">
+              <span>Preferred reporting currency</span>
+
+              <select formControlName="defaultCurrency">
+                <option value="CAD">CAD — Canadian Dollar</option>
+                <option value="USD">USD — US Dollar</option>
+              </select>
+            </label>
+
+            <p class="field-help">
+              Sets your reporting preference. Existing transaction
+              amounts will not be converted automatically.
+            </p>
+
+            <label class="settings-field">
+              <span>Timezone</span>
+
+              <select formControlName="timeZone">
+                @for (zone of supportedTimeZones; track zone.value) {
+                  <option [value]="zone.value">
+                    {{ zone.label }}
+                  </option>
+                }
+              </select>
+            </label>
+
+            <label class="settings-field">
+              <span>Date format</span>
+
+              <select formControlName="dateFormat">
+                <option value="yyyy-MM-dd">
+                  YYYY-MM-DD (2026-10-25)
+                </option>
+
+                <option value="dd/MM/yyyy">
+                  DD/MM/YYYY (25/10/2026)
+                </option>
+
+                <option value="MM/dd/yyyy">
+                  MM/DD/YYYY (10/25/2026)
+                </option>
+              </select>
+            </label>
+
+            <label class="settings-field">
+              <span>Monthly budget starts on</span>
+
+              <select formControlName="budgetStartDay">
+                @for (day of [
+                  1,2,3,4,5,6,7,8,9,10,11,12,13,14,
+                  15,16,17,18,19,20,21,22,23,24,25,
+                  26,27,28
+                ]; track day) {
+                  <option [ngValue]="day">
+                    Day {{ day }}
+                  </option>
+                }
+              </select>
+            </label>
+
+            <p class="field-help">
+              Choose the day your monthly budget cycle begins.
+              For example, day 15 starts a cycle on the 15th
+              of each month.
+            </p>
+
+            <div class="settings-actions">
+              <button
+                type="submit"
+                class="settings-primary-button"
+                [disabled]="savingPreferences() ||
+                            preferencesForm.invalid">
+
+                {{
+                  savingPreferences()
+                    ? 'Saving preferences...'
+                    : 'Save preferences'
+                }}
+              </button>
+            </div>
+          </form>
+        } @else {
+          <button
+            type="button"
+            class="outline-link"
+            (click)="loadPreferences()">
+            Retry loading preferences
+          </button>
+        }
+      }
+    </section>
+
+    <!-- PRIVACY -->
+    <section class="settings-card">
+      <div class="card-heading">
+        <div class="heading-icon" aria-hidden="true">▣</div>
+        <div>
+          <h2>Privacy and data</h2>
+          <p>Export your information or permanently close your account</p>
         </div>
       </div>
 
-      <p class="supporting-note">
-        These preferences will be editable once we add per-user settings persistence to PostgreSQL.
+      @if (privacyError()) {
+        <p class="dialog-error" role="alert">{{ privacyError() }}</p>
+      }
+
+      @if (privacyMessage()) {
+        <p class="profile-success" role="status">{{ privacyMessage() }}</p>
+      }
+
+      <div class="security-content">
+        <div>
+          <strong>Download your financial data</strong>
+          <p>Save your profile, preferences, accounts, categories, transactions and recurring items as JSON.</p>
+        </div>
+        <button
+          type="button"
+          class="outline-link"
+          [disabled]="exportingData()"
+          (click)="exportFinancialData()"
+        >
+          {{ exportingData() ? 'Preparing export...' : 'Download export' }}
+        </button>
+      </div>
+
+      <div class="settings-divider"></div>
+
+      <h3 class="appearance-subheading">Delete account</h3>
+      <p class="field-help">
+        This permanently deletes your account and its financial records. Export
+        your data first if you want to keep a copy. This action cannot be undone.
       </p>
+
+      <form [formGroup]="deleteAccountForm" (ngSubmit)="deleteAccount()">
+        <label class="settings-field">
+          <span>Current password</span>
+          <input
+            type="password"
+            formControlName="currentPassword"
+            autocomplete="current-password"
+          />
+        </label>
+
+        <label class="settings-field">
+          <span>Type DELETE to confirm</span>
+          <input
+            type="text"
+            formControlName="confirmation"
+            autocomplete="off"
+          />
+        </label>
+
+        <div class="settings-actions">
+          <button
+            type="submit"
+            class="danger-button"
+            [disabled]="deletingAccount() || deleteAccountForm.invalid"
+          >
+            {{ deletingAccount() ? 'Deleting account...' : 'Permanently delete account' }}
+          </button>
+        </div>
+      </form>
     </section>
   </div>
 </section>

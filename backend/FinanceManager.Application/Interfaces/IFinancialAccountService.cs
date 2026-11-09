@@ -29,4 +29,15 @@ public interface IFinancialAccountService
         Guid id,
         Guid userId,
         CancellationToken ct = default);
+
+    Task<FinancialAccountResponse?> ShareAsync(
+        Guid id,
+        Guid userId,
+        Guid householdId,
+        CancellationToken ct = default);
+
+    Task<FinancialAccountResponse?> UnshareAsync(
+        Guid id,
+        Guid userId,
+        CancellationToken ct = default);
 }

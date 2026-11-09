@@ -13,30 +13,39 @@ import {
   ReactiveFormsModule,
   Validators
 } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 import { forkJoin, finalize } from 'rxjs';
 
 import { Accounts } from '../accounts';
 import { FinancialAccount } from '../financial-account.model';
 import { AccountBalance } from '../../dashboard/dashboard.model';
+import {
+  Household,
+  HouseholdsService
+} from '../../households/households.service';
 
 @Component({
   selector: 'app-account-list',
   standalone: true,
-  imports: [CurrencyPipe, ReactiveFormsModule],
+  imports: [CurrencyPipe, ReactiveFormsModule, RouterLink],
   templateUrl: './account-list.html',
   styleUrl: './account-list.scss'
 })
 export class AccountList implements OnInit {
   private readonly accountsService = inject(Accounts);
   private readonly fb = inject(FormBuilder);
+  private readonly householdsService = inject(HouseholdsService);
 
   readonly accounts = signal<FinancialAccount[]>([]);
   readonly balances = signal<AccountBalance[]>([]);
+  readonly households = signal<Household[]>([]);
+  readonly shareHouseholdId = signal('');
 
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly deleting = signal(false);
+  readonly sharingAccountId = signal<string | null>(null);
 
   readonly showForm = signal(false);
   readonly editingAccountId = signal<string | null>(null);
@@ -103,11 +112,12 @@ export class AccountList implements OnInit {
 
     forkJoin({
       accounts: this.accountsService.getAccounts(),
-      balances: this.accountsService.getBalances()
+      balances: this.accountsService.getBalances(),
+      households: this.householdsService.getAll()
     })
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
-        next: ({ accounts, balances }) => {
+        next: ({ accounts, balances, households }) => {
           this.accounts.set(
             [...accounts].sort(
               (a, b) => a.name.localeCompare(b.name)
@@ -115,6 +125,12 @@ export class AccountList implements OnInit {
           );
 
           this.balances.set(balances);
+          this.households.set(households);
+          if (
+            !households.some(x => x.id === this.shareHouseholdId())
+          ) {
+            this.shareHouseholdId.set(households[0]?.id ?? '');
+          }
         },
         error: err => {
           console.error('Loading accounts failed:', err);
@@ -141,6 +157,49 @@ export class AccountList implements OnInit {
 
   getAccountTypeLabel(type: string): string {
     return type === 'CreditCard' ? 'Credit Card' : type;
+  }
+
+  householdName(id: string | null): string {
+    if (!id) return '';
+    return this.households().find(x => x.id === id)?.name ?? 'household';
+  }
+
+  shareAccount(account: FinancialAccount): void {
+    const householdId = this.shareHouseholdId();
+    if (!householdId || this.sharingAccountId()) return;
+
+    this.sharingAccountId.set(account.id);
+    this.error.set('');
+    this.accountsService.shareAccount(account.id, householdId)
+      .pipe(finalize(() => this.sharingAccountId.set(null)))
+      .subscribe({
+        next: () => {
+          this.successMessage.set(
+            `${account.name} is now shared with ${this.householdName(householdId)}.`
+          );
+          this.loadAccounts();
+        },
+        error: err => this.error.set(
+          err.error?.message ?? 'Unable to share this account.'
+        )
+      });
+  }
+
+  unshareAccount(account: FinancialAccount): void {
+    if (this.sharingAccountId()) return;
+    this.sharingAccountId.set(account.id);
+    this.error.set('');
+    this.accountsService.unshareAccount(account.id)
+      .pipe(finalize(() => this.sharingAccountId.set(null)))
+      .subscribe({
+        next: () => {
+          this.successMessage.set(`${account.name} is private again.`);
+          this.loadAccounts();
+        },
+        error: err => this.error.set(
+          err.error?.message ?? 'Unable to stop sharing this account.'
+        )
+      });
   }
 
   openCreateForm(): void {

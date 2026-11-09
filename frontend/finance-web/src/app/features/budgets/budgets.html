@@ -1,0 +1,145 @@
+<section class="budgets-page">
+  <header class="page-heading">
+    <div>
+      <span class="eyebrow">SPENDING PLAN</span>
+      <h1>Category budgets</h1>
+      <p>Set a monthly limit for each expense category and track spending in each currency.</p>
+    </div>
+    <button type="button" class="outline-button" (click)="load()">Refresh</button>
+  </header>
+
+  @if (error()) {
+    <p class="error-message" role="alert">{{ error() }}</p>
+  }
+  @if (message()) {
+    <p class="success-message" role="status">{{ message() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="state-message" role="status">Loading budgets...</p>
+  } @else {
+    <div class="budget-layout">
+      <section class="budget-list" aria-label="Current budgets">
+        <h2>This budget cycle</h2>
+        @for (budget of budgets(); track budget.id) {
+          <article class="budget-card">
+            <header>
+              <div>
+                <h3>{{ budget.categoryName }}</h3>
+                <p>
+                  {{ budget.periodStartDate | date: 'mediumDate' : 'UTC' }}
+                  – {{ budget.periodEndDate | date: 'mediumDate' : 'UTC' }}
+                </p>
+              </div>
+              <div class="budget-badges">
+                @if (budget.householdId) {
+                  <span class="scope-badge">{{ householdName(budget.householdId) }}</span>
+                }
+                <span class="currency-badge">{{ budget.currency }}</span>
+              </div>
+            </header>
+
+            <div class="budget-values">
+              <strong>{{ budget.amountSpent | currency: budget.currency : 'symbol' : '1.2-2' }}</strong>
+              <span>of {{ budget.monthlyLimit | currency: budget.currency : 'symbol' : '1.2-2' }}</span>
+            </div>
+            <div
+              class="progress-track"
+              [class.over-budget]="budget.percentSpent > 100"
+              role="progressbar"
+              [attr.aria-valuenow]="budget.percentSpent"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-label]="budget.categoryName + ' budget used'"
+            >
+              <div class="progress-fill" [style.width.%]="barWidth(budget)"></div>
+            </div>
+            <div class="budget-footer">
+              <span>{{ budget.percentSpent | number: '1.0-1' }}% used</span>
+              <strong [class.negative]="budget.remaining < 0">
+                {{ budget.remaining | currency: budget.currency : 'symbol' : '1.2-2' }}
+                {{ budget.remaining < 0 ? 'over' : 'remaining' }}
+              </strong>
+            </div>
+            <footer>
+              @if (budget.canEdit) {
+                <button type="button" class="text-button" (click)="edit(budget)">Edit</button>
+                <button type="button" class="text-button danger-text" (click)="remove(budget)">Delete</button>
+              }
+            </footer>
+          </article>
+        } @empty {
+          <p class="state-message">No budgets yet. Create one to start tracking category limits.</p>
+        }
+      </section>
+
+      <section class="budget-form-card">
+        <h2>{{ editingId() ? 'Edit budget' : 'Create budget' }}</h2>
+        <p>Budgets use your saved cycle start day and timezone. Spending is not converted between currencies.</p>
+
+        @if (expenseCategories().length === 0) {
+          <p class="state-message">Create an expense category before setting a budget.</p>
+        } @else if (currencies().length === 0) {
+          <p class="state-message">Create an account before setting a budget.</p>
+        } @else {
+          <form [formGroup]="form" (ngSubmit)="save()">
+            <label>
+              <span>Budget scope</span>
+              <select formControlName="householdId">
+                <option value="">Only me</option>
+                @for (household of households(); track household.id) {
+                  @if (household.canEdit) {
+                    <option [value]="household.id">{{ household.name }} (shared)</option>
+                  }
+                }
+              </select>
+            </label>
+
+            <label>
+              <span>Expense category</span>
+              <select formControlName="categoryId">
+                <option value="">Choose a category</option>
+                @for (category of expenseCategories(); track category.id) {
+                  <option [value]="category.id">{{ category.name }}</option>
+                }
+              </select>
+            </label>
+
+            <label>
+              <span>Currency</span>
+              <select formControlName="currency">
+                @for (currency of currencies(); track currency) {
+                  <option [value]="currency">{{ currency }}</option>
+                }
+              </select>
+            </label>
+
+            <label>
+              <span>Monthly limit</span>
+              <input
+                type="number"
+                formControlName="monthlyLimit"
+                min="0.01"
+                max="9999999999999999.99"
+                step="0.01"
+              />
+            </label>
+
+            @if (form.invalid && form.touched) {
+              <p class="field-error">Choose a category and enter a positive limit.</p>
+            }
+
+            <div class="form-actions">
+              @if (editingId()) {
+                <button type="button" class="outline-button" (click)="cancelEdit()">Cancel</button>
+              }
+              <button type="submit" class="primary-button" [disabled]="saving() || form.invalid">
+                {{ saving() ? 'Saving...' : editingId() ? 'Save changes' : 'Create budget' }}
+              </button>
+            </div>
+          </form>
+        }
+      </section>
+    </div>
+  }
+</section>

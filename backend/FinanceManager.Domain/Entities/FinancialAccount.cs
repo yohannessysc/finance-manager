@@ -4,6 +4,7 @@ public class FinancialAccount
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid UserId { get; set; }
+    public Guid? HouseholdId { get; set; }
 
     public string Name { get; set; } = string.Empty;
 

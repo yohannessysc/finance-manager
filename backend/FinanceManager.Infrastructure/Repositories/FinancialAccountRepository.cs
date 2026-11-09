@@ -20,9 +20,18 @@ public class FinancialAccountRepository
         Guid userId,
         CancellationToken ct = default)
     {
-        return await _context.FinancialAccounts
+        var householdIds = await _context.HouseholdMembers
             .AsNoTracking()
             .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+
+        return await _context.FinancialAccounts
+            .AsNoTracking()
+            .Where(x =>
+                x.UserId == userId ||
+                (x.HouseholdId.HasValue &&
+                 householdIds.Contains(x.HouseholdId.Value)))
             .OrderBy(x => x.Name)
             .ToListAsync(ct);
     }
@@ -32,9 +41,18 @@ public class FinancialAccountRepository
         Guid userId,
         CancellationToken ct = default)
     {
+        var householdIds = await _context.HouseholdMembers
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+
         return await _context.FinancialAccounts
             .FirstOrDefaultAsync(
-                x => x.Id == id && x.UserId == userId,
+                x => x.Id == id &&
+                     (x.UserId == userId ||
+                      (x.HouseholdId.HasValue &&
+                       householdIds.Contains(x.HouseholdId.Value))),
                 ct);
     }
 

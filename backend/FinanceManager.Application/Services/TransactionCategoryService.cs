@@ -78,6 +78,8 @@ public class TransactionCategoryService : ITransactionCategoryService
 
         if (category is null)
             return null;
+        if (category.UserId != userId)
+            return null;
 
         ValidateName(request.Name);
 
@@ -110,6 +112,8 @@ public class TransactionCategoryService : ITransactionCategoryService
             id, userId, ct);
 
         if (category is null)
+            return false;
+        if (category.UserId != userId)
             return false;
 
         if (await _repository.IsInUseAsync(id, userId, ct))

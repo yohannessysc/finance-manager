@@ -204,4 +204,150 @@ public sealed class ResendEmailService : IEmailService
         }
     }
 
+    public async Task SendEmailChangeAsync(
+        string email,
+        string confirmationUrl,
+        CancellationToken ct = default)
+    {
+        var apiKey = _configuration["Resend:ApiKey"];
+        var from = _configuration["Resend:From"];
+
+        if (string.IsNullOrWhiteSpace(apiKey) ||
+            string.IsNullOrWhiteSpace(from))
+        {
+            throw new InvalidOperationException(
+                "Resend email configuration is missing.");
+        }
+
+        var safeUrl = HtmlEncoder.Default.Encode(confirmationUrl);
+        var html = $"""
+            <div style="font-family:Arial,sans-serif;
+                        max-width:520px;margin:40px auto;
+                        padding:32px;border-radius:16px;
+                        background:#ffffff;">
+              <h2 style="color:#123b32;">Confirm your new email address</h2>
+              <p style="color:#64748b;line-height:1.7;">
+                We received a request to change the email address
+                on your Finance Manager account. Confirm the new
+                address to complete this change.
+              </p>
+              <a href="{safeUrl}"
+                 style="display:inline-block;margin:24px 0;
+                        background:#13866b;color:#ffffff;
+                        padding:14px 24px;border-radius:9px;
+                        text-decoration:none;font-weight:bold;">
+                Confirm email address
+              </a>
+              <p style="color:#64748b;font-size:13px;">
+                If you did not request this change, you can ignore
+                this message. Your current email address will remain
+                unchanged.
+              </p>
+            </div>
+            """;
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "https://api.resend.com/emails");
+
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", apiKey);
+
+        request.Content = JsonContent.Create(new
+        {
+            from,
+            to = new[] { email },
+            subject = "Confirm your Finance Manager email change",
+            html
+        });
+
+        using var response = await _http.SendAsync(request, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError(
+                "Resend email API returned status {StatusCode}.",
+                (int)response.StatusCode);
+
+            throw new HttpRequestException(
+                "Email change confirmation delivery failed.",
+                null,
+                response.StatusCode);
+        }
+
+        _logger.LogInformation(
+            "Email change confirmation accepted by email provider.");
+    }
+
+    public async Task SendHouseholdInvitationAsync(
+        string email,
+        string householdName,
+        string invitationUrl,
+        CancellationToken ct = default)
+    {
+        var apiKey = _configuration["Resend:ApiKey"];
+        var from = _configuration["Resend:From"];
+        if (string.IsNullOrWhiteSpace(apiKey) ||
+            string.IsNullOrWhiteSpace(from))
+        {
+            throw new InvalidOperationException(
+                "Resend email configuration is missing.");
+        }
+
+        var safeHouseholdName = HtmlEncoder.Default.Encode(householdName);
+        var safeUrl = HtmlEncoder.Default.Encode(invitationUrl);
+        var html = $"""
+            <div style="font-family:Arial,sans-serif;
+                        max-width:520px;margin:40px auto;
+                        padding:32px;border-radius:16px;
+                        background:#ffffff;">
+              <h2 style="color:#123b32;">You're invited to a household</h2>
+              <p style="color:#64748b;line-height:1.7;">
+                You have been invited to join
+                <strong>{safeHouseholdName}</strong> on Finance Manager.
+                Sign in with this email address and accept the invitation
+                before it expires.
+              </p>
+              <a href="{safeUrl}"
+                 style="display:inline-block;margin:24px 0;
+                        background:#13866b;color:#ffffff;
+                        padding:14px 24px;border-radius:9px;
+                        text-decoration:none;font-weight:bold;">
+                Review invitation
+              </a>
+              <p style="color:#64748b;font-size:13px;">
+                If you did not expect this invitation, you can ignore it.
+              </p>
+            </div>
+            """;
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "https://api.resend.com/emails");
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", apiKey);
+        request.Content = JsonContent.Create(new
+        {
+            from,
+            to = new[] { email },
+            subject = $"Invitation to join {householdName}",
+            html
+        });
+
+        using var response = await _http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError(
+                "Household invitation email failed with status {StatusCode}.",
+                (int)response.StatusCode);
+            throw new HttpRequestException(
+                "Household invitation email delivery failed.",
+                null,
+                response.StatusCode);
+        }
+
+        _logger.LogInformation(
+            "Household invitation email accepted by provider.");
+    }
+
 }

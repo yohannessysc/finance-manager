@@ -24,6 +24,16 @@ public interface IFinancialTransactionRepository
         Guid userId,
         CancellationToken ct = default);
 
+    Task<bool> CanEditAccountAsync(
+        Guid accountId,
+        Guid userId,
+        CancellationToken ct = default);
+
+    Task<bool> CanEditTransactionAsync(
+        Guid transactionId,
+        Guid userId,
+        CancellationToken ct = default);
+
     Task AddAsync(
         FinancialTransaction transaction,
         CancellationToken ct = default);

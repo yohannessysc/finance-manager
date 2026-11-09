@@ -99,6 +99,14 @@ public class RecurringTransactionService : IRecurringTransactionService
         if (schedule is null)
             return null;
 
+        if (!await _transactionRepository.CanEditAccountAsync(
+                schedule.FinancialAccountId,
+                userId,
+                ct))
+        {
+            return null;
+        }
+
         if (schedule.Status == RecurringStatus.Cancelled)
         {
             throw new ArgumentException(
@@ -170,6 +178,13 @@ public class RecurringTransactionService : IRecurringTransactionService
 
         if (schedule is null)
             return false;
+        if (!await _transactionRepository.CanEditAccountAsync(
+                schedule.FinancialAccountId,
+                userId,
+                ct))
+        {
+            return false;
+        }
 
         if (schedule.Status == RecurringStatus.Cancelled)
         {
@@ -193,6 +208,13 @@ public class RecurringTransactionService : IRecurringTransactionService
 
         if (schedule is null)
             return false;
+        if (!await _transactionRepository.CanEditAccountAsync(
+                schedule.FinancialAccountId,
+                userId,
+                ct))
+        {
+            return false;
+        }
 
         if (schedule.Status == RecurringStatus.Cancelled)
         {
@@ -243,6 +265,13 @@ public class RecurringTransactionService : IRecurringTransactionService
 
         if (schedule is null)
             return false;
+        if (!await _transactionRepository.CanEditAccountAsync(
+                schedule.FinancialAccountId,
+                userId,
+                ct))
+        {
+            return false;
+        }
 
         schedule.Status = RecurringStatus.Cancelled;
 
@@ -349,6 +378,15 @@ public class RecurringTransactionService : IRecurringTransactionService
                 "Invalid financial account.");
         }
 
+        if (!await _transactionRepository.CanEditAccountAsync(
+                accountId,
+                userId,
+                ct))
+        {
+            throw new UnauthorizedAccessException(
+                "Your household role does not allow recurring transaction changes.");
+        }
+
         if (type == TransactionType.Transfer)
         {
             if (categoryId.HasValue)
@@ -374,6 +412,15 @@ public class RecurringTransactionService : IRecurringTransactionService
             {
                 throw new ArgumentException(
                     "Invalid destination account.");
+            }
+
+            if (!await _transactionRepository.CanEditAccountAsync(
+                    destinationAccountId.Value,
+                    userId,
+                    ct))
+            {
+                throw new UnauthorizedAccessException(
+                    "Your household role does not allow recurring transaction changes.");
             }
 
             if (destination.Currency != account.Currency)

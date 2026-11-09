@@ -86,6 +86,9 @@ public class FinancialTransactionService
         UpdateTransactionRequest request,
         CancellationToken ct = default)
     {
+        if (!await _repository.CanEditTransactionAsync(id, userId, ct))
+            return null;
+
         var transaction = await _repository.GetByIdAsync(
             id, userId, ct);
 
@@ -132,6 +135,9 @@ public class FinancialTransactionService
         Guid userId,
         CancellationToken ct = default)
     {
+        if (!await _repository.CanEditTransactionAsync(id, userId, ct))
+            return false;
+
         var transaction = await _repository.GetByIdAsync(
             id, userId, ct);
 
@@ -198,6 +204,15 @@ public class FinancialTransactionService
                 "Invalid financial account.");
         }
 
+        if (!await _repository.CanEditAccountAsync(
+                accountId,
+                userId,
+                ct))
+        {
+            throw new UnauthorizedAccessException(
+                "Your household role does not allow transaction changes.");
+        }
+
         if (type == TransactionType.Transfer)
         {
             if (categoryId is not null)
@@ -220,6 +235,15 @@ public class FinancialTransactionService
             {
                 throw new ArgumentException(
                     "Invalid destination account.");
+            }
+
+            if (!await _repository.CanEditAccountAsync(
+                    destinationAccountId.Value,
+                    userId,
+                    ct))
+            {
+                throw new UnauthorizedAccessException(
+                    "Your household role does not allow transaction changes.");
             }
 
             if (account.Currency != destination.Currency)

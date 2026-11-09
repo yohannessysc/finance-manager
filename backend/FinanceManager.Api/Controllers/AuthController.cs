@@ -7,6 +7,7 @@ using FinanceManager.Application.Interfaces;
 using FinanceManager.Application.Services;
 using FinanceManager.Infrastructure.Identity;
 using FinanceManager.Infrastructure.Persistence;
+using FinanceManager.Infrastructure.Services;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -36,6 +37,7 @@ public class AuthController : ControllerBase
     private readonly IEmailService _emailService;
     private readonly IConfiguration _configuration;
     private readonly FinanceDbContext _db;
+    private readonly UserSessionService _sessions;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
@@ -43,7 +45,8 @@ public class AuthController : ControllerBase
         DefaultCategorySeeder defaultCategorySeeder,
         IEmailService emailService,
         IConfiguration configuration,
-        FinanceDbContext db)
+        FinanceDbContext db,
+        UserSessionService sessions)
     {
         _userManager = userManager;
         _signInManager = signInManager;
@@ -51,6 +54,7 @@ public class AuthController : ControllerBase
         _emailService = emailService;
         _configuration = configuration;
         _db = db;
+        _sessions = sessions;
     }
 
     // ---------------------------------------
@@ -209,10 +213,9 @@ public class AuthController : ControllerBase
             });
         }
 
-        var result = await _signInManager.PasswordSignInAsync(
+        var result = await _signInManager.CheckPasswordSignInAsync(
             user,
             request.Password ?? string.Empty,
-            isPersistent: false,
             lockoutOnFailure: true);
 
         if (result.IsLockedOut)
@@ -259,6 +262,42 @@ public class AuthController : ControllerBase
             });
         }
 
+        // Password verified. Record a server-side session and
+        // bind the authentication cookie to it.
+        var session = await _sessions.CreateAsync(
+            user.Id,
+            Request.Headers.UserAgent.ToString(),
+            UserSessionService.Lifetime,
+            HttpContext.RequestAborted);
+
+        // Add session claim to user (required for cookie validation)
+        // First, remove any existing fm_sid claims from previous logins
+        var existingSessionClaims = await _userManager.GetClaimsAsync(user);
+        var oldSessionClaims = existingSessionClaims
+            .Where(c => c.Type == UserSessionService.SessionClaimType)
+            .ToList();
+        
+        foreach (var oldClaim in oldSessionClaims)
+        {
+            await _userManager.RemoveClaimAsync(user, oldClaim);
+        }
+
+        // Add the new session claim
+        var sessionClaim = new System.Security.Claims.Claim(
+            UserSessionService.SessionClaimType,
+            session.Id.ToString());
+        
+        await _userManager.AddClaimAsync(user, sessionClaim);
+
+        // Sign in will now include the fm_sid claim from the user's claims
+        await _signInManager.SignInAsync(
+            user,
+            isPersistent: false);
+
+        await _sessions.PurgeOldAsync(
+            user.Id,
+            HttpContext.RequestAborted);
+
         return Ok(new AuthUserResponse(
             user.Id,
             user.FirstName,
@@ -297,6 +336,19 @@ public class AuthController : ControllerBase
     [ServiceFilter(typeof(ValidateCsrfTokenFilter))]
     public async Task<IActionResult> Logout()
     {
+        var userId = _userManager.GetUserId(User);
+        var sessionClaim = User
+            .FindFirst(UserSessionService.SessionClaimType)?.Value;
+
+        if (Guid.TryParse(userId, out var uid) &&
+            Guid.TryParse(sessionClaim, out var sid))
+        {
+            await _sessions.RevokeAsync(
+                uid,
+                sid,
+                HttpContext.RequestAborted);
+        }
+
         await _signInManager.SignOutAsync();
 
         return NoContent();
@@ -445,6 +497,12 @@ public class AuthController : ControllerBase
                     error => error.Description)
             });
         }
+
+        // A reset means the old credentials may be compromised.
+        await _sessions.RevokeAllAsync(
+            user.Id,
+            exceptSessionId: null,
+            ct: HttpContext.RequestAborted);
 
         return Ok(new
         {

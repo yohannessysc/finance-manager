@@ -2,20 +2,20 @@ import {
   Component,
   OnInit,
   OnDestroy,
-  ViewChild,
-  ElementRef,
   signal,
-  effect
+  effect,
+  inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClientModule } from '@angular/common/http';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject } from 'rxjs';
 import {
   BankConnectionService,
   PlaidLinkTokenResponse,
   BankConnectionResponse,
   ExchangePlaidTokenRequest
 } from '../services/bank-connection.service';
+import { AuthService } from '../../../core/auth/auth.service';
 
 /**
  * Plaid Link component for connecting bank accounts
@@ -97,11 +97,8 @@ import {
       border-radius: 4px;
       font-size: 0.9rem;
     }
-  `]
 })
 export class PlaidLinkComponent implements OnInit, OnDestroy {
-  @ViewChild('plaidLinkContainer', { static: false }) plaidLinkContainer?: ElementRef;
-
   // Signal state management
   isLoading = signal(false);
   error = signal<string | null>(null);
@@ -110,9 +107,11 @@ export class PlaidLinkComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private linkToken: string | null = null;
   private plaidScriptLoaded = false;
-  private plaidApiHost = 'https://cdn.plaid.com/link/v3/stable/plain.js';
 
-  constructor(private bankConnectionService: BankConnectionService) {
+  private bankConnectionService = inject(BankConnectionService);
+  private authService = inject(AuthService);
+
+  constructor() {
     // Auto-clear error after 5 seconds
     effect(() => {
       const errorMsg = this.error();
@@ -135,7 +134,7 @@ export class PlaidLinkComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.loadPlaidScript();
+    this.ensurePlaidLoaded();
   }
 
   ngOnDestroy(): void {
@@ -144,22 +143,36 @@ export class PlaidLinkComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load Plaid SDK script from CDN
+   * Ensure Plaid SDK is loaded
    */
-  private loadPlaidScript(): void {
-    if (this.plaidScriptLoaded) return;
+  private ensurePlaidLoaded(): void {
+    if (this.plaidScriptLoaded || (window as any).Plaid) {
+      this.plaidScriptLoaded = true;
+      return;
+    }
 
+    // Create and append script dynamically
     const script = document.createElement('script');
-    script.src = this.plaidApiHost;
+    script.src = 'https://cdn.plaid.com/link/v3/stable/plain.js';
+    script.type = 'text/javascript';
     script.async = true;
+    
     script.onload = () => {
       this.plaidScriptLoaded = true;
+      console.log('Plaid SDK loaded successfully');
     };
+
     script.onerror = () => {
-      this.error.set('Failed to load Plaid. Please try again.');
-      this.plaidScriptLoaded = false;
+      console.error('Failed to load Plaid SDK');
+      // Don't show error yet - might load when user clicks button
     };
-    document.body.appendChild(script);
+
+    // Try appending to head first, then body as fallback
+    try {
+      document.head.appendChild(script);
+    } catch {
+      document.body.appendChild(script);
+    }
   }
 
   /**
@@ -171,11 +184,28 @@ export class PlaidLinkComponent implements OnInit, OnDestroy {
       this.successMessage.set(null);
       this.isLoading.set(true);
 
+      // Ensure Plaid is loaded
+      if (!this.plaidScriptLoaded) {
+        this.ensurePlaidLoaded();
+        // Wait a bit for script to load
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      const plaid = (window as any).Plaid;
+      if (!plaid) {
+        throw new Error('Plaid SDK failed to load. Please check your connection and try again.');
+      }
+
+      const currentUser = this.authService.currentUser();
+      if (!currentUser?.email) {
+        throw new Error('User not authenticated');
+      }
+
       // Step 1: Get link token from backend
       const linkTokenResponse = await this.bankConnectionService
         .createLinkToken({
-          userEmail: 'user@example.com',
-          userFullName: 'User Name'
+          userEmail: currentUser.email,
+          userFullName: currentUser.email.split('@')[0]
         })
         .toPromise();
 
@@ -197,13 +227,17 @@ export class PlaidLinkComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Open Plaid Link modal using Plaid SDK
+   * Open Plaid Link modal using Plaid SDK from index.html
    */
   private openPlaidLinkModal(): void {
-    // Check if Plaid is loaded
+    if (!this.linkToken) {
+      this.error.set('No link token available');
+      return;
+    }
+
     const plaid = (window as any).Plaid;
     if (!plaid) {
-      this.error.set('Plaid SDK not loaded. Please refresh and try again.');
+      this.error.set('Plaid SDK not loaded. Please refresh the page.');
       return;
     }
 
@@ -245,7 +279,7 @@ export class PlaidLinkComponent implements OnInit, OnDestroy {
       // Step 3: Exchange public token for access token
       this.bankConnectionService
         .exchangePublicToken(exchangeRequest)
-        .pipe(takeUntil(this.destroy$))
+        .pipe()
         .subscribe({
           next: (connection: BankConnectionResponse) => {
             this.isLoading.set(false);

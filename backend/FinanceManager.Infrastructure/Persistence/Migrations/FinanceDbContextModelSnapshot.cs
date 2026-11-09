@@ -22,6 +22,303 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("FinanceManager.Domain.Entities.BankConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BankProvider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("ConnectedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("FinancialAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FinicityCustomerId")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("FinicityInstitutionName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("InstitutionId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("InstitutionName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastSyncAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PlaidAccessToken")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("PlaidItemId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FinancialAccountId");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("LastSyncAtUtc");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("BankConnections", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.BankSyncLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BankConnectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BankConnectionId1")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DetailedLog")
+                        .HasColumnType("text");
+
+                    b.Property<int>("DuplicatesSkipped")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ErrorCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("SyncFromDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("SyncToDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("TransactionsImported")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TransactionsRetrieved")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankConnectionId");
+
+                    b.HasIndex("BankConnectionId1");
+
+                    b.HasIndex("StartedAtUtc");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("BankSyncLogs", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.BankTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("AutoMatchConfidence")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("AutoMatchedCategory")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<Guid>("BankConnectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BankConnectionId1")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BankTransactionId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("FinancialTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("FinancialTransactionId1")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ImportedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MaskedAccountNumber")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<string>("Merchant")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("TransactionDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TransactionHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankConnectionId");
+
+                    b.HasIndex("BankConnectionId1");
+
+                    b.HasIndex("FinancialTransactionId");
+
+                    b.HasIndex("FinancialTransactionId1");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TransactionDateUtc");
+
+                    b.HasIndex("TransactionHash");
+
+                    b.ToTable("BankTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.CategoryRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DescriptionPattern")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MatchCount")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("MaxAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("MerchantPattern")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal?>("MinAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TransactionTypeId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("IsActive");
+
+                    b.HasIndex("Priority");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("CategoryRules", (string)null);
+                });
+
             modelBuilder.Entity("FinanceManager.Domain.Entities.FinancialAccount", b =>
                 {
                     b.Property<Guid>("Id")
@@ -739,6 +1036,77 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("FinanceManager.Domain.Entities.BankConnection", b =>
+                {
+                    b.HasOne("FinanceManager.Domain.Entities.FinancialAccount", null)
+                        .WithMany()
+                        .HasForeignKey("FinancialAccountId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.BankSyncLog", b =>
+                {
+                    b.HasOne("FinanceManager.Domain.Entities.BankConnection", null)
+                        .WithMany("SyncLogs")
+                        .HasForeignKey("BankConnectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FinanceManager.Domain.Entities.BankConnection", "BankConnection")
+                        .WithMany()
+                        .HasForeignKey("BankConnectionId1");
+
+                    b.Navigation("BankConnection");
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.BankTransaction", b =>
+                {
+                    b.HasOne("FinanceManager.Domain.Entities.BankConnection", null)
+                        .WithMany("BankTransactions")
+                        .HasForeignKey("BankConnectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FinanceManager.Domain.Entities.BankConnection", "BankConnection")
+                        .WithMany()
+                        .HasForeignKey("BankConnectionId1");
+
+                    b.HasOne("FinanceManager.Domain.Entities.FinancialTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("FinancialTransactionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("FinanceManager.Domain.Entities.FinancialTransaction", "FinancialTransaction")
+                        .WithMany()
+                        .HasForeignKey("FinancialTransactionId1")
+                        .HasConstraintName("FK_BankTransactions_FinancialTransactions_FinancialTransactio~1");
+
+                    b.Navigation("BankConnection");
+
+                    b.Navigation("FinancialTransaction");
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.CategoryRule", b =>
+                {
+                    b.HasOne("FinanceManager.Domain.Entities.TransactionCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FinanceManager.Domain.Entities.FinancialAccount", b =>
                 {
                     b.HasOne("FinanceManager.Domain.Entities.Household", null)
@@ -976,6 +1344,13 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.BankConnection", b =>
+                {
+                    b.Navigation("BankTransactions");
+
+                    b.Navigation("SyncLogs");
                 });
 #pragma warning restore 612, 618
         }

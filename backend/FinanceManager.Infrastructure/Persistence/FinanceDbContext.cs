@@ -62,6 +62,19 @@ public class FinanceDbContext
     public DbSet<HouseholdInvitation> HouseholdInvitations
         => Set<HouseholdInvitation>();
 
+    // Bank integration
+    public DbSet<BankConnection> BankConnections
+        => Set<BankConnection>();
+
+    public DbSet<BankTransaction> BankTransactions
+        => Set<BankTransaction>();
+
+    public DbSet<BankSyncLog> BankSyncLogs
+        => Set<BankSyncLog>();
+
+    public DbSet<CategoryRule> CategoryRules
+        => Set<CategoryRule>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -598,6 +611,231 @@ public class FinanceDbContext
                 x.SavingsGoalId,
                 x.ContributionDateUtc
             });
+        });
+
+        // ==========================================
+        // BANK INTEGRATION
+        // ==========================================
+
+        modelBuilder.Entity<BankConnection>(entity =>
+        {
+            entity.ToTable("BankConnections");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.PlaidAccessToken)
+                .HasMaxLength(500);
+
+            entity.Property(x => x.PlaidItemId)
+                .HasMaxLength(100);
+
+            entity.Property(x => x.FinicityInstitutionName)
+                .HasMaxLength(200);
+
+            entity.Property(x => x.FinicityCustomerId)
+                .HasMaxLength(50);
+
+            entity.Property(x => x.BankProvider)
+                .IsRequired()
+                .HasMaxLength(20);
+
+            entity.Property(x => x.InstitutionName)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(x => x.InstitutionId)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(x => x.Status)
+                .IsRequired();
+
+            entity.Property(x => x.ConnectedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.LastSyncAtUtc)
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.ExpiresAtUtc)
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.CreatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.UpdatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<FinancialAccount>()
+                .WithMany()
+                .HasForeignKey(x => x.FinancialAccountId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(x => x.UserId);
+            entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.LastSyncAtUtc);
+            entity.HasIndex(x => x.IsDeleted);
+        });
+
+        modelBuilder.Entity<BankTransaction>(entity =>
+        {
+            entity.ToTable("BankTransactions");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.BankTransactionId)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(x => x.TransactionDateUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.Amount)
+                .IsRequired()
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.Currency)
+                .IsRequired()
+                .HasMaxLength(3);
+
+            entity.Property(x => x.Description)
+                .IsRequired()
+                .HasMaxLength(500);
+
+            entity.Property(x => x.Merchant)
+                .HasMaxLength(200);
+
+            entity.Property(x => x.AccountType)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.Property(x => x.MaskedAccountNumber)
+                .HasMaxLength(10);
+
+            entity.Property(x => x.Status)
+                .IsRequired();
+
+            entity.Property(x => x.TransactionHash)
+                .IsRequired()
+                .HasMaxLength(64);
+
+            entity.Property(x => x.AutoMatchedCategory)
+                .HasMaxLength(150);
+
+            entity.Property(x => x.ImportedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasOne<BankConnection>()
+                .WithMany(bc => bc.BankTransactions)
+                .HasForeignKey(x => x.BankConnectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<FinancialTransaction>()
+                .WithMany()
+                .HasForeignKey(x => x.FinancialTransactionId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(x => x.BankConnectionId);
+            entity.HasIndex(x => x.TransactionHash);
+            entity.HasIndex(x => x.TransactionDateUtc);
+            entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.FinancialTransactionId);
+        });
+
+        modelBuilder.Entity<BankSyncLog>(entity =>
+        {
+            entity.ToTable("BankSyncLogs");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.StartedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.CompletedAtUtc)
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.Status)
+                .IsRequired()
+                .HasMaxLength(20);
+
+            entity.Property(x => x.ErrorMessage)
+                .HasMaxLength(500);
+
+            entity.Property(x => x.SyncFromDateUtc)
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.SyncToDateUtc)
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.DetailedLog)
+                .HasColumnType("text");
+
+            entity.HasOne<BankConnection>()
+                .WithMany(bc => bc.SyncLogs)
+                .HasForeignKey(x => x.BankConnectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(x => x.BankConnectionId);
+            entity.HasIndex(x => x.Status);
+            entity.HasIndex(x => x.StartedAtUtc);
+        });
+
+        modelBuilder.Entity<CategoryRule>(entity =>
+        {
+            entity.ToTable("CategoryRules");
+
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Name)
+                .IsRequired()
+                .HasMaxLength(150);
+
+            entity.Property(x => x.MerchantPattern)
+                .HasMaxLength(200);
+
+            entity.Property(x => x.DescriptionPattern)
+                .HasMaxLength(200);
+
+            entity.Property(x => x.MinAmount)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.MaxAmount)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.Priority)
+                .IsRequired();
+
+            entity.Property(x => x.CreatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.UpdatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<TransactionCategory>()
+                .WithMany()
+                .HasForeignKey(x => x.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.UserId);
+            entity.HasIndex(x => x.Priority);
+            entity.HasIndex(x => x.IsActive);
         });
     }
 }

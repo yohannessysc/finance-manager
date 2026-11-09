@@ -5,6 +5,7 @@ import { Login } from './features/auth/login/login';
 import { Register } from './features/auth/register/register';
 import { VerifyEmail } from './features/auth/verify-email/verify-email';
 import { ConfirmEmail } from './features/auth/confirm-email/confirm-email';
+import { ConfirmEmailChange } from './features/auth/confirm-email-change/confirm-email-change';
 import { ForgotPassword } from './features/auth/forgot-password/forgot-password';
 import { ResetPassword } from './features/auth/reset-password/reset-password';
 
@@ -14,6 +15,10 @@ import { Transactions } from './features/transactions/transactions';
 import { Recurring } from './features/recurring/recurring';
 import { Categories } from './features/categories/categories';
 import { Settings } from './features/settings/settings';
+import { Budgets } from './features/budgets/budgets';
+import { SavingsGoals } from './features/savings-goals/savings-goals';
+import { Households } from './features/households/households';
+import { AcceptHouseholdInvitation } from './features/households/accept-household-invitation';
 
 import { AppShell } from './layout/app-shell/app-shell';
 import { authGuard } from './core/auth/auth.guard';
@@ -23,6 +28,7 @@ export const routes: Routes = [
   { path: 'register', component: Register },
   { path: 'verify-email', component: VerifyEmail },
   { path: 'confirm-email', component: ConfirmEmail },
+  { path: 'confirm-email-change', component: ConfirmEmailChange },
   { path: 'forgot-password', component: ForgotPassword },
   { path: 'reset-password', component: ResetPassword },
 
@@ -41,6 +47,10 @@ export const routes: Routes = [
       { path: 'transactions', component: Transactions },
       { path: 'recurring', component: Recurring },
       { path: 'categories', component: Categories },
+      { path: 'budgets', component: Budgets },
+      { path: 'savings-goals', component: SavingsGoals },
+      { path: 'households', component: Households },
+      { path: 'households/accept', component: AcceptHouseholdInvitation },
       { path: 'settings', component: Settings }
     ]
   },

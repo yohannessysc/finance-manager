@@ -2,6 +2,7 @@
 using FinanceManager.Application.DTOs.Dashboard;
 using FinanceManager.Application.DTOs.Transactions;
 using FinanceManager.Application.Interfaces;
+using FinanceManager.Application.Services;
 using FinanceManager.Domain.Enums;
 using FinanceManager.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -28,8 +29,7 @@ public class DashboardService : IDashboardService
         CancellationToken ct = default)
     {
         var nowUtc = DateTime.UtcNow;
-        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(
-            DefaultTimeZoneId);
+        var timeZone = await GetUserTimeZoneAsync(userId, ct);
 
         var localNow = TimeZoneInfo.ConvertTimeFromUtc(
             nowUtc, timeZone);
@@ -49,25 +49,18 @@ public class DashboardService : IDashboardService
             userId, ct);
 
         // Account lookup also provides the currency for transactions.
-        var accountCurrencies = await _db.FinancialAccounts
-            .AsNoTracking()
-            .Where(a => a.UserId == userId)
-            .Select(a => new
-            {
-                a.Id,
-                a.Currency
-            })
-            .ToDictionaryAsync(
-                a => a.Id,
-                a => a.Currency,
-                ct);
+        var accountCurrencies = balances.ToDictionary(
+            account => account.AccountId,
+            account => account.Currency);
+        var accessibleAccountIds = accountCurrencies.Keys.ToArray();
 
         // 2. Transactions for the last six calendar months.
         var transactions = await _db.FinancialTransactions
             .AsNoTracking()
             .Where(t =>
-                t.UserId == userId &&
+                accessibleAccountIds.Contains(t.FinancialAccountId) &&
                 t.TransactionDateUtc >= rangeStartUtc &&
+                t.TransactionDateUtc <= nowUtc &&
                 t.TransactionDateUtc < rangeEndUtc)
             .ToListAsync(ct);
 
@@ -129,9 +122,14 @@ public class DashboardService : IDashboardService
         }
 
         // 4. Current-month spending grouped by category.
+        var categoryIds = transactions
+            .Where(x => x.CategoryId.HasValue)
+            .Select(x => x.CategoryId!.Value)
+            .Distinct()
+            .ToArray();
         var categories = await _db.TransactionCategories
             .AsNoTracking()
-            .Where(c => c.UserId == userId)
+            .Where(c => categoryIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
 
         var currentExpenses = transactions
@@ -198,7 +196,9 @@ public class DashboardService : IDashboardService
         // 5. Ten most recent transactions.
         var recentEntities = await _db.FinancialTransactions
             .AsNoTracking()
-            .Where(t => t.UserId == userId)
+            .Where(t =>
+                accessibleAccountIds.Contains(t.FinancialAccountId) &&
+                t.TransactionDateUtc <= nowUtc)
             .OrderByDescending(t => t.TransactionDateUtc)
             .ThenByDescending(t => t.CreatedAtUtc)
             .Take(10)
@@ -223,7 +223,7 @@ public class DashboardService : IDashboardService
         var recurringEntities = await _db.RecurringTransactions
             .AsNoTracking()
             .Where(r =>
-                r.UserId == userId &&
+                accessibleAccountIds.Contains(r.FinancialAccountId) &&
                 r.Status == RecurringStatus.Active &&
                 r.NextOccurrenceUtc <= nowUtc.AddDays(30) &&
                 (r.EndDateUtc == null ||
@@ -253,6 +253,223 @@ public class DashboardService : IDashboardService
             upcomingRecurring);
     }
 
+    public async Task<CashFlowForecastResponse> GetForecastAsync(
+        Guid userId,
+        int horizonDays,
+        CancellationToken ct = default)
+    {
+        if (horizonDays is < 1 or > 365)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(horizonDays),
+                "Forecast horizon must be between 1 and 365 days.");
+        }
+
+        var nowUtc = DateTime.UtcNow;
+        var timeZone = await GetUserTimeZoneAsync(userId, ct);
+        var localToday = DateOnly.FromDateTime(
+            TimeZoneInfo.ConvertTimeFromUtc(nowUtc, timeZone));
+        var endDate = localToday.AddDays(horizonDays);
+        var forecastEndUtc = ToUtc(
+            endDate.ToDateTime(TimeOnly.MinValue),
+            timeZone);
+
+        var balances = await _accountBalanceService.GetAllAsync(
+            userId,
+            ct);
+        var accountCurrencies = balances.ToDictionary(
+            x => x.AccountId,
+            x => x.Currency);
+        var accessibleAccountIds = accountCurrencies.Keys.ToArray();
+        var startingBalances = balances
+            .GroupBy(x => x.Currency, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                x => x.Key,
+                x => x.Sum(account => account.CurrentBalance),
+                StringComparer.OrdinalIgnoreCase);
+
+        var events = new Dictionary<
+            (string Currency, DateOnly Date),
+            ForecastEvent>();
+
+        void AddEvent(
+            string currency,
+            DateTime eventUtc,
+            TransactionType type,
+            decimal amount)
+        {
+            eventUtc = DateTime.SpecifyKind(
+                eventUtc,
+                DateTimeKind.Utc);
+            var localDate = DateOnly.FromDateTime(
+                TimeZoneInfo.ConvertTimeFromUtc(
+                    eventUtc < nowUtc ? nowUtc : eventUtc,
+                    timeZone));
+
+            if (localDate < localToday || localDate >= endDate)
+                return;
+
+            var key = (currency, localDate);
+            if (!events.TryGetValue(key, out var forecastEvent))
+            {
+                forecastEvent = new ForecastEvent();
+                events.Add(key, forecastEvent);
+            }
+
+            if (type == TransactionType.Income)
+                forecastEvent.Income += amount;
+            else if (type == TransactionType.Expense)
+                forecastEvent.Expenses += amount;
+
+            forecastEvent.PlannedItems++;
+        }
+
+        var upcomingTransactions = await _db.FinancialTransactions
+            .AsNoTracking()
+            .Where(t =>
+                accessibleAccountIds.Contains(t.FinancialAccountId) &&
+                t.TransactionDateUtc > nowUtc &&
+                t.TransactionDateUtc < forecastEndUtc &&
+                (t.Type == TransactionType.Income ||
+                 t.Type == TransactionType.Expense))
+            .ToListAsync(ct);
+
+        foreach (var transaction in upcomingTransactions)
+        {
+            if (!accountCurrencies.TryGetValue(
+                transaction.FinancialAccountId,
+                out var currency))
+            {
+                continue;
+            }
+
+            AddEvent(
+                currency,
+                transaction.TransactionDateUtc,
+                transaction.Type,
+                transaction.Amount);
+        }
+
+        var schedules = await _db.RecurringTransactions
+            .AsNoTracking()
+            .Where(r =>
+                accessibleAccountIds.Contains(r.FinancialAccountId) &&
+                r.Status == RecurringStatus.Active &&
+                r.NextOccurrenceUtc < forecastEndUtc &&
+                (r.Type == TransactionType.Income ||
+                 r.Type == TransactionType.Expense) &&
+                (r.EndDateUtc == null ||
+                 r.NextOccurrenceUtc <= r.EndDateUtc))
+            .ToListAsync(ct);
+
+        foreach (var schedule in schedules)
+        {
+            if (!accountCurrencies.TryGetValue(
+                schedule.FinancialAccountId,
+                out var currency))
+            {
+                continue;
+            }
+
+            var occurrence = DateTime.SpecifyKind(
+                schedule.NextOccurrenceUtc,
+                DateTimeKind.Utc);
+            var startDateUtc = DateTime.SpecifyKind(
+                schedule.StartDateUtc,
+                DateTimeKind.Utc);
+            var endDateUtc = schedule.EndDateUtc.HasValue
+                ? DateTime.SpecifyKind(
+                    schedule.EndDateUtc.Value,
+                    DateTimeKind.Utc)
+                : (DateTime?)null;
+
+            if (occurrence < nowUtc)
+            {
+                AddEvent(
+                    currency,
+                    occurrence,
+                    schedule.Type,
+                    schedule.Amount);
+
+                occurrence = RecurrenceCalculator.GetNextOccurrence(
+                    startDateUtc,
+                    schedule.Frequency,
+                    nowUtc,
+                    schedule.TimeZoneId);
+            }
+
+            while (occurrence < forecastEndUtc &&
+                   (endDateUtc is null ||
+                    occurrence <= endDateUtc.Value))
+            {
+                AddEvent(
+                    currency,
+                    occurrence,
+                    schedule.Type,
+                    schedule.Amount);
+
+                occurrence = RecurrenceCalculator.GetNextOccurrence(
+                    startDateUtc,
+                    schedule.Frequency,
+                    occurrence,
+                    schedule.TimeZoneId);
+            }
+        }
+
+        var currencyForecasts = startingBalances
+            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(currency =>
+            {
+                var projectedBalance = currency.Value;
+                var days = new List<ForecastDayResponse>(
+                    horizonDays);
+
+                for (var offset = 0; offset < horizonDays; offset++)
+                {
+                    var date = localToday.AddDays(offset);
+                    events.TryGetValue(
+                        (currency.Key, date),
+                        out var dayEvent);
+
+                    var income = dayEvent?.Income ?? 0;
+                    var expenses = dayEvent?.Expenses ?? 0;
+                    projectedBalance += income - expenses;
+                    days.Add(new ForecastDayResponse(
+                        date,
+                        income,
+                        expenses,
+                        income - expenses,
+                        projectedBalance,
+                        dayEvent?.PlannedItems ?? 0));
+                }
+
+                return new ForecastCurrencyResponse(
+                    currency.Key,
+                    currency.Value,
+                    projectedBalance,
+                    days);
+            })
+            .ToList();
+
+        return new CashFlowForecastResponse(
+            horizonDays,
+            nowUtc,
+            currencyForecasts);
+    }
+
+    private async Task<TimeZoneInfo> GetUserTimeZoneAsync(
+        Guid userId,
+        CancellationToken ct)
+    {
+        var timeZoneId = await _db.UserPreferences
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.TimeZone)
+            .FirstOrDefaultAsync(ct) ?? DefaultTimeZoneId;
+
+        return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+    }
+
     private static DateTime ToUtc(
         DateTime localDate,
         TimeZoneInfo timeZone)
@@ -264,5 +481,12 @@ public class DashboardService : IDashboardService
         return TimeZoneInfo.ConvertTimeToUtc(
             unspecified,
             timeZone);
+    }
+
+    private sealed class ForecastEvent
+    {
+        public decimal Income { get; set; }
+        public decimal Expenses { get; set; }
+        public int PlannedItems { get; set; }
     }
 }

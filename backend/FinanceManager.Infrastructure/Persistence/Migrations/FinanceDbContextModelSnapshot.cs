@@ -41,6 +41,9 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)");
 
+                    b.Property<Guid?>("HouseholdId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
@@ -54,6 +57,8 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
 
                     b.HasIndex("UserId");
 
@@ -87,6 +92,10 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("FinancialAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ImportFingerprint")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Merchant")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -118,9 +127,154 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"RecurringTransactionId\" IS NOT NULL AND \"ScheduledOccurrenceUtc\" IS NOT NULL");
 
+                    b.HasIndex("UserId", "ImportFingerprint")
+                        .IsUnique()
+                        .HasFilter("\"ImportFingerprint\" IS NOT NULL");
+
                     b.HasIndex("UserId", "TransactionDateUtc");
 
                     b.ToTable("FinancialTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.Household", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId");
+
+                    b.ToTable("Households", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.HouseholdInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("AcceptedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InvitedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvitedByUserId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("HouseholdId", "NormalizedEmail", "ExpiresAtUtc");
+
+                    b.ToTable("HouseholdInvitations", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.HouseholdMember", b =>
+                {
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("JoinedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.HasKey("HouseholdId", "UserId");
+
+                    b.HasIndex("UserId", "HouseholdId");
+
+                    b.ToTable("HouseholdMembers", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.MonthlyBudget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<Guid?>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("MonthlyLimit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("HouseholdId", "CategoryId", "Currency")
+                        .IsUnique()
+                        .HasFilter("\"HouseholdId\" IS NOT NULL");
+
+                    b.HasIndex("UserId", "CategoryId", "Currency")
+                        .IsUnique()
+                        .HasFilter("\"HouseholdId\" IS NULL");
+
+                    b.ToTable("MonthlyBudgets", (string)null);
                 });
 
             modelBuilder.Entity("FinanceManager.Domain.Entities.RecurringTransaction", b =>
@@ -189,6 +343,80 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.HasIndex("UserId", "Status", "NextOccurrenceUtc");
 
                     b.ToTable("RecurringTransactions", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.SavingsGoal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<decimal>("TargetAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime?>("TargetDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAtUtc");
+
+                    b.ToTable("SavingsGoals", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.SavingsGoalContribution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("ContributionDateUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<Guid>("SavingsGoalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SavingsGoalId");
+
+                    b.HasIndex("UserId", "SavingsGoalId", "ContributionDateUtc");
+
+                    b.ToTable("SavingsGoalContributions", (string)null);
                 });
 
             modelBuilder.Entity("FinanceManager.Domain.Entities.TransactionCategory", b =>
@@ -310,6 +538,75 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.HasKey("UserId", "Purpose");
 
                     b.ToTable("EmailSendCooldowns", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Infrastructure.Persistence.UserPreference", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("BudgetStartDay")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DateFormat")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("DefaultCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("UserPreferences", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Infrastructure.Persistence.UserSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeviceName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LastSeenAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserAgent")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "ExpiresAtUtc");
+
+                    b.ToTable("UserSessions", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
@@ -444,6 +741,11 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FinanceManager.Domain.Entities.FinancialAccount", b =>
                 {
+                    b.HasOne("FinanceManager.Domain.Entities.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -481,6 +783,65 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FinanceManager.Domain.Entities.Household", b =>
+                {
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.HouseholdInvitation", b =>
+                {
+                    b.HasOne("FinanceManager.Domain.Entities.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("InvitedByUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.HouseholdMember", b =>
+                {
+                    b.HasOne("FinanceManager.Domain.Entities.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.MonthlyBudget", b =>
+                {
+                    b.HasOne("FinanceManager.Domain.Entities.TransactionCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("FinanceManager.Domain.Entities.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FinanceManager.Domain.Entities.RecurringTransaction", b =>
                 {
                     b.HasOne("FinanceManager.Domain.Entities.TransactionCategory", null)
@@ -506,6 +867,30 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FinanceManager.Domain.Entities.SavingsGoal", b =>
+                {
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.SavingsGoalContribution", b =>
+                {
+                    b.HasOne("FinanceManager.Domain.Entities.SavingsGoal", null)
+                        .WithMany()
+                        .HasForeignKey("SavingsGoalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FinanceManager.Domain.Entities.TransactionCategory", b =>
                 {
                     b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
@@ -516,6 +901,24 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("FinanceManager.Infrastructure.Persistence.EmailSendCooldown", b =>
+                {
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Infrastructure.Persistence.UserPreference", b =>
+                {
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithOne()
+                        .HasForeignKey("FinanceManager.Infrastructure.Persistence.UserPreference", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Infrastructure.Persistence.UserSession", b =>
                 {
                     b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()

@@ -1,0 +1,148 @@
+<section class="goals-page">
+  <header class="page-heading">
+    <div>
+      <span class="eyebrow">FINANCIAL TARGETS</span>
+      <h1>Savings goals</h1>
+      <p>Set targets and record contributions. Goal contributions track progress and do not change account balances.</p>
+    </div>
+    <button type="button" class="outline-button" (click)="load()">Refresh</button>
+  </header>
+
+  @if (error()) {
+    <p class="error-message" role="alert">{{ error() }}</p>
+  }
+  @if (message()) {
+    <p class="success-message" role="status">{{ message() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="state-message" role="status">Loading savings goals...</p>
+  } @else {
+    <div class="goals-layout">
+      <section class="goal-list" aria-label="Savings goals">
+        <h2>Your targets</h2>
+        @for (goal of goals(); track goal.id) {
+          <article class="goal-card">
+            <header>
+              <div>
+                <h3>{{ goal.name }}</h3>
+                <p>{{ goal.targetDateUtc ? 'Target date ' + (goal.targetDateUtc | date: 'mediumDate' : 'UTC') : 'No target date' }}</p>
+              </div>
+              <span class="currency-badge">{{ goal.currency }}</span>
+            </header>
+            <div class="goal-values">
+              <strong>{{ goal.amountSaved | currency: goal.currency : 'symbol' : '1.2-2' }}</strong>
+              <span>of {{ goal.targetAmount | currency: goal.currency : 'symbol' : '1.2-2' }}</span>
+            </div>
+            <div
+              class="progress-track"
+              role="progressbar"
+              [attr.aria-valuenow]="goal.progressPercent"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-label]="goal.name + ' progress'"
+            >
+              <div class="progress-fill" [style.width.%]="barWidth(goal)"></div>
+            </div>
+            <div class="goal-footer">
+              <span>{{ goal.progressPercent | number: '1.0-1' }}% complete</span>
+              <strong>{{ goal.remaining | currency: goal.currency : 'symbol' : '1.2-2' }} remaining</strong>
+            </div>
+
+            @if (selectedGoalId() === goal.id) {
+              <div class="contributions">
+                <h4>Contributions</h4>
+                @for (item of contributions(); track item.id) {
+                  <div class="contribution-row">
+                    <span>{{ item.contributionDateUtc.slice(0, 10) }} · {{ item.note || 'Contribution' }}</span>
+                    <strong>{{ item.amount | currency: goal.currency : 'symbol' : '1.2-2' }}</strong>
+                    <button
+                      type="button"
+                      class="text-button danger-text"
+                      aria-label="Remove contribution"
+                      (click)="removeContribution(goal, item)"
+                    >Remove</button>
+                  </div>
+                } @empty {
+                  <p class="state-message">No contributions recorded.</p>
+                }
+              </div>
+
+              <form class="contribution-form" [formGroup]="contributionForm" (ngSubmit)="addContribution(goal)">
+                <label>
+                  <span>Amount</span>
+                  <input type="number" formControlName="amount" min="0.01" step="0.01" />
+                </label>
+                <label>
+                  <span>Date</span>
+                  <input type="date" formControlName="date" />
+                </label>
+                <label>
+                  <span>Note (optional)</span>
+                  <input type="text" formControlName="note" maxlength="250" />
+                </label>
+                <button type="submit" class="primary-button" [disabled]="saving() || contributionForm.invalid">
+                  {{ saving() ? 'Saving...' : 'Add contribution' }}
+                </button>
+              </form>
+            }
+
+            <footer>
+              <button type="button" class="text-button" (click)="showContributions(goal)">
+                {{ selectedGoalId() === goal.id ? 'Refresh contributions' : 'Contributions' }}
+              </button>
+              <button type="button" class="text-button" (click)="edit(goal)">Edit</button>
+              <button type="button" class="text-button danger-text" (click)="removeGoal(goal)">Delete</button>
+            </footer>
+          </article>
+        } @empty {
+          <p class="state-message">No savings goals yet. Create a target to start tracking progress.</p>
+        }
+      </section>
+
+      <section class="goal-form-card">
+        <h2>{{ editingId() ? 'Edit goal' : 'Create a goal' }}</h2>
+        @if (currencies().length === 0 && !editingId()) {
+          <p class="state-message">Create an account before adding a savings goal.</p>
+        } @else {
+          <form [formGroup]="goalForm" (ngSubmit)="saveGoal()">
+            <label>
+              <span>Goal name</span>
+              <input type="text" formControlName="name" maxlength="150" />
+            </label>
+
+            @if (!editingId()) {
+              <label>
+                <span>Currency</span>
+                <select formControlName="currency">
+                  @for (currency of currencies(); track currency) {
+                    <option [value]="currency">{{ currency }}</option>
+                  }
+                </select>
+              </label>
+            }
+
+            <label>
+              <span>Target amount</span>
+              <input type="number" formControlName="targetAmount" min="0.01" step="0.01" />
+            </label>
+
+            <label>
+              <span>Target date (optional)</span>
+              <input type="date" formControlName="targetDate" />
+            </label>
+
+            <div class="form-actions">
+              @if (editingId()) {
+                <button type="button" class="outline-button" (click)="cancelEdit()">Cancel</button>
+              }
+              <button type="submit" class="primary-button" [disabled]="saving() || goalForm.invalid">
+                {{ saving() ? 'Saving...' : editingId() ? 'Save changes' : 'Create goal' }}
+              </button>
+            </div>
+          </form>
+        }
+      </section>
+    </div>
+  }
+</section>

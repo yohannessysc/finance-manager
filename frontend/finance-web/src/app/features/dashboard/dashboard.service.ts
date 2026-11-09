@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { DashboardSummary } from './dashboard.model';
+import { CashFlowForecast, DashboardSummary } from './dashboard.model';
 
 @Injectable({
   providedIn: 'root'
@@ -14,5 +14,11 @@ export class DashboardService {
 
   getSummary(): Observable<DashboardSummary> {
     return this.http.get<DashboardSummary>(this.apiUrl);
+  }
+
+  getForecast(days = 30): Observable<CashFlowForecast> {
+    return this.http.get<CashFlowForecast>(
+      `/api/v1/dashboard/forecast?days=${days}`
+    );
   }
 }

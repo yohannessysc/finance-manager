@@ -7,5 +7,7 @@ public record FinancialAccountResponse(
     string AccountType,
     string Currency,
     decimal OpeningBalance,
-    DateTime CreatedAtUtc
+    DateTime CreatedAtUtc,
+    Guid? HouseholdId = null,
+    bool IsOwner = false
 );

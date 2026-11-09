@@ -153,19 +153,57 @@
             </div>
           </div>
 
-          <div class="card-actions">
-            <button type="button" class="edit-button" (click)="startEdit(account)">
-              Edit account
-            </button>
+          @if (account.householdId) {
+            <p class="sharing-status">
+              Shared with {{ householdName(account.householdId) }}
+            </p>
+          } @else if (account.isOwner) {
+            <p class="sharing-status">Private account</p>
+          } @else {
+            <p class="sharing-status">Shared by a household member</p>
+          }
 
-            <button
-              type="button"
-              class="delete-button"
-              [attr.aria-label]="'Delete ' + account.name"
-              (click)="requestDelete(account)"
-            >
-              Delete
-            </button>
+          <div class="card-actions">
+            @if (account.isOwner) {
+              <button type="button" class="edit-button" (click)="startEdit(account)">
+                Edit account
+              </button>
+
+              <button
+                type="button"
+                class="delete-button"
+                [attr.aria-label]="'Delete ' + account.name"
+                (click)="requestDelete(account)"
+              >
+                Delete
+              </button>
+              @if (account.householdId) {
+                <button
+                  type="button"
+                  class="edit-button"
+                  [disabled]="sharingAccountId() === account.id"
+                  (click)="unshareAccount(account)"
+                >Stop sharing</button>
+              } @else if (households().length > 0) {
+                <select
+                  aria-label="Choose household to share account with"
+                  [value]="shareHouseholdId()"
+                  (change)="shareHouseholdId.set($any($event.target).value)"
+                >
+                  @for (household of households(); track household.id) {
+                    <option [value]="household.id">{{ household.name }}</option>
+                  }
+                </select>
+                <button
+                  type="button"
+                  class="edit-button"
+                  [disabled]="sharingAccountId() === account.id"
+                  (click)="shareAccount(account)"
+                >Share account</button>
+              } @else {
+                <a class="edit-button" routerLink="/households">Create a household</a>
+              }
+            }
           </div>
         </article>
       }

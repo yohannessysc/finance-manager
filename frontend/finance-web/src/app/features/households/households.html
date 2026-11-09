@@ -1,0 +1,110 @@
+<section class="households-page">
+  <header class="page-heading">
+    <div>
+      <span class="eyebrow">SHARED FINANCES</span>
+      <h1>Households</h1>
+      <p>Invite trusted members, assign permissions, and explicitly share accounts.</p>
+    </div>
+    <button type="button" class="outline-button" (click)="load()">Refresh</button>
+  </header>
+
+  @if (error()) {
+    <p class="error-message" role="alert">{{ error() }}</p>
+  }
+  @if (message()) {
+    <p class="success-message" role="status">{{ message() }}</p>
+  }
+
+  <aside class="privacy-note">
+    Household membership does not expose your personal accounts. Only accounts
+    you explicitly share with a household become visible to its members.
+  </aside>
+
+  @if (loading()) {
+    <p class="state-message">Loading households...</p>
+  } @else {
+    @for (household of households(); track household.id) {
+      <article class="household-card">
+        <header>
+          <div>
+            <h2>{{ household.name }}</h2>
+            <p>{{ household.members.length }} of 20 members</p>
+          </div>
+          <span class="role-badge">
+            {{ household.canManage ? 'Manager' : 'Member' }}
+          </span>
+        </header>
+
+        <section class="members">
+          <h3>Members and permissions</h3>
+          @for (member of household.members; track member.userId) {
+            <div class="member-row">
+              <div>
+                <strong>{{ member.firstName }} {{ member.lastName }}</strong>
+                <span>{{ member.email }}</span>
+              </div>
+              @if (household.canManage && member.role !== 'Owner') {
+                <select
+                  [value]="member.role"
+                  [attr.aria-label]="'Role for ' + member.email"
+                  (change)="changeRole(household, member, $any($event.target).value)"
+                >
+                  @if (household.canAssignAdmin) {
+                    <option value="Admin">Admin</option>
+                  }
+                  <option value="Editor">Editor</option>
+                  <option value="Viewer">Read only</option>
+                </select>
+                <button
+                  type="button"
+                  class="text-button danger-text"
+                  (click)="removeMember(household, member)"
+                >Remove</button>
+              } @else {
+                <span class="role-badge">{{ member.role }}</span>
+              }
+            </div>
+          }
+        </section>
+
+        @if (household.canManage) {
+          <form class="invite-form" [formGroup]="inviteForm" (ngSubmit)="invite(household)">
+            <h3>Invite a member</h3>
+            <label>
+              <span>Email address</span>
+              <input type="email" formControlName="email" autocomplete="email" />
+            </label>
+            <label>
+              <span>Permission</span>
+              <select formControlName="role">
+                @if (household.canAssignAdmin) {
+                  <option value="Admin">Admin — manage members</option>
+                }
+                <option value="Editor">Editor — manage shared activity</option>
+                <option value="Viewer">Read only</option>
+              </select>
+            </label>
+            <button type="submit" class="primary-button" [disabled]="saving() || inviteForm.invalid">
+              {{ saving() ? 'Sending...' : 'Send invitation' }}
+            </button>
+          </form>
+        }
+      </article>
+    } @empty {
+      <p class="state-message">You have not joined a household yet.</p>
+    }
+
+    <section class="create-card">
+      <h2>Create a household</h2>
+      <form [formGroup]="createForm" (ngSubmit)="create()">
+        <label>
+          <span>Household name</span>
+          <input type="text" formControlName="name" maxlength="100" />
+        </label>
+        <button type="submit" class="primary-button" [disabled]="saving() || createForm.invalid">
+          {{ saving() ? 'Creating...' : 'Create household' }}
+        </button>
+      </form>
+    </section>
+  }
+</section>

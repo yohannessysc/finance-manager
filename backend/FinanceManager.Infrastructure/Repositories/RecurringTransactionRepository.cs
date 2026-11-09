@@ -20,9 +20,21 @@ public class RecurringTransactionRepository
         Guid userId,
         CancellationToken ct = default)
     {
-        return await _context.RecurringTransactions
+        var householdIds = await _context.HouseholdMembers
             .AsNoTracking()
             .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+        var accountIds = _context.FinancialAccounts
+            .Where(x =>
+                x.UserId == userId ||
+                (x.HouseholdId.HasValue &&
+                 householdIds.Contains(x.HouseholdId.Value)))
+            .Select(x => x.Id);
+
+        return await _context.RecurringTransactions
+            .AsNoTracking()
+            .Where(x => accountIds.Contains(x.FinancialAccountId))
             .OrderBy(x => x.NextOccurrenceUtc)
             .ToListAsync(ct);
     }
@@ -32,9 +44,22 @@ public class RecurringTransactionRepository
         Guid userId,
         CancellationToken ct = default)
     {
+        var householdIds = await _context.HouseholdMembers
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+        var accountIds = _context.FinancialAccounts
+            .Where(x =>
+                x.UserId == userId ||
+                (x.HouseholdId.HasValue &&
+                 householdIds.Contains(x.HouseholdId.Value)))
+            .Select(x => x.Id);
+
         return await _context.RecurringTransactions
             .FirstOrDefaultAsync(
-                x => x.Id == id && x.UserId == userId,
+                x => x.Id == id &&
+                     accountIds.Contains(x.FinancialAccountId),
                 ct);
     }
 
@@ -65,10 +90,26 @@ public class RecurringTransactionRepository
     Guid userId,
     CancellationToken ct = default)
     {
+        var householdIds = await _context.HouseholdMembers
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.HouseholdId)
+            .ToListAsync(ct);
+        var scheduleExists = await _context.RecurringTransactions
+            .AnyAsync(
+                x => x.Id == scheduleId &&
+                     _context.FinancialAccounts.Any(account =>
+                         account.Id == x.FinancialAccountId &&
+                         (account.UserId == userId ||
+                          (account.HouseholdId.HasValue &&
+                           householdIds.Contains(account.HouseholdId.Value)))),
+                ct);
+        if (!scheduleExists)
+            return null;
+
         return await _context.FinancialTransactions
             .AsNoTracking()
             .Where(x =>
-                x.UserId == userId &&
                 x.RecurringTransactionId == scheduleId &&
                 x.ScheduledOccurrenceUtc.HasValue)
             .MaxAsync(

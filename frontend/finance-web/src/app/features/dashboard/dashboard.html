@@ -67,6 +67,86 @@
       </article>
     </div>
 
+    <article class="panel forecast-panel">
+      <div class="panel-heading">
+        <div>
+          <h2>Cash-flow forecast</h2>
+          <p>Expected income, bills and scheduled expenses over the next 30 days</p>
+        </div>
+        @if (forecast(); as projection) {
+          <div class="forecast-ending">
+            Projected balance
+            <strong>
+              {{
+                projection.projectedEndingBalance
+                  | currency: projection.currency : 'symbol' : '1.2-2'
+              }}
+            </strong>
+          </div>
+        }
+      </div>
+
+      @if (forecastLoading()) {
+        <p class="empty">Calculating your forecast...</p>
+      } @else if (forecastError()) {
+        <p class="forecast-error" role="status">{{ forecastError() }}</p>
+      } @else if (forecast(); as projection) {
+        <div class="forecast-totals">
+          <span>
+            Starting balance
+            <strong>
+              {{
+                projection.startingBalance
+                  | currency: projection.currency : 'symbol' : '1.2-2'
+              }}
+            </strong>
+          </span>
+          <span>
+            Expected income
+            <strong class="positive">
+              {{
+                forecastIncome()
+                  | currency: projection.currency : 'symbol' : '1.2-2'
+              }}
+            </strong>
+          </span>
+          <span>
+            Expected expenses
+            <strong>
+              {{
+                forecastExpenses()
+                  | currency: projection.currency : 'symbol' : '1.2-2'
+              }}
+            </strong>
+          </span>
+        </div>
+
+        <div
+          class="forecast-chart"
+          role="img"
+          aria-label="Daily forecasted net cash flow for the next 30 days"
+        >
+          @for (day of forecastDays(); track day.date) {
+            <div class="forecast-column">
+              <div class="forecast-bar-track">
+                @if (day.netCashFlow !== 0) {
+                  <div
+                    class="forecast-bar"
+                    [class.negative]="day.netCashFlow < 0"
+                    [style.height.%]="forecastBarHeight(day.netCashFlow)"
+                    [title]="forecastDayTitle(day.date, day.netCashFlow)"
+                  ></div>
+                }
+              </div>
+              <span>{{ forecastDayLabel(day.date) }}</span>
+            </div>
+          }
+        </div>
+      } @else {
+        <p class="empty">Add an account to see a cash-flow forecast.</p>
+      }
+    </article>
+
     <div class="content-grid">
       <article class="panel chart-panel">
         <div class="panel-heading">

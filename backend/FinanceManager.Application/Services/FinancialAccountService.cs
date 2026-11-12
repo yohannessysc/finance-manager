@@ -200,7 +200,8 @@ public class FinancialAccountService : IFinancialAccountService
             account.OpeningBalance,
             account.CreatedAtUtc,
             account.HouseholdId,
-            account.UserId == currentUserId
+            account.UserId == currentUserId,
+            account.BankConnectionId is not null
         );
     }
 }

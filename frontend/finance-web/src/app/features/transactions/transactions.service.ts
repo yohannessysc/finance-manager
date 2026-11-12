@@ -102,6 +102,18 @@ export class TransactionsService {
     );
   }
 
+  // OFX/QFX statements go into one chosen account.
+  importOfx(file: File, accountId: string): Observable<CsvImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('accountId', accountId);
+
+    return this.http.post<CsvImportResult>(
+      `${this.transactionsUrl}/import/ofx`,
+      formData
+    );
+  }
+
   importCsv(file: File): Observable<CsvImportResult> {
     const formData = new FormData();
     formData.append('file', file);

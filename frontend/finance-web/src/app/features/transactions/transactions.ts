@@ -32,6 +32,7 @@ import {
 } from './transactions.service';
 import { categoryOptions } from '../../core/services/categories.service';
 import { SplitEditor } from './dialogs/split-editor';
+import { ImportDialog } from './dialogs/import-dialog';
 
 @Component({
   selector: 'app-transactions',
@@ -40,7 +41,8 @@ import { SplitEditor } from './dialogs/split-editor';
     CurrencyPipe,
     DatePipe,
     ReactiveFormsModule,
-    SplitEditor
+    SplitEditor,
+    ImportDialog
   ],
   templateUrl: './transactions.html',
   styleUrl: './transactions.scss'
@@ -71,6 +73,15 @@ export class Transactions implements OnInit {
   readonly editingId = signal<string | null>(null);
   readonly transactionToDelete = signal<RecentTransaction | null>(null);
   readonly splitting = signal<RecentTransaction | null>(null);
+  readonly importing = signal(false);
+
+  onImportClosed(importedAny: boolean): void {
+    this.importing.set(false);
+    if (importedAny) {
+      this.successMessage.set('Transactions imported.');
+      this.loadData();
+    }
+  }
 
   readonly transactionForm = this.fb.nonNullable.group({
     type: [TransactionType.Expense, Validators.required],

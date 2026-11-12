@@ -421,6 +421,10 @@ builder.Services.AddScoped<
     ReportService>();
 
 builder.Services.AddScoped<
+    IOfxTransactionImportService,
+    OfxTransactionImportService>();
+
+builder.Services.AddScoped<
     ISavingsGoalService,
     SavingsGoalService>();
 

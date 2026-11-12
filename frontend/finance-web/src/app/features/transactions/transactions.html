@@ -11,6 +11,8 @@
         ↻ Refresh
       </button>
 
+      <button class="btn secondary" type="button" (click)="importing.set(true)">⤒ Import</button>
+
       <button class="btn primary" type="button" (click)="openCreate()">+ Add transaction</button>
     </div>
   </header>
@@ -411,4 +413,8 @@
     (saved)="onSplitSaved($event)"
     (closed)="splitting.set(null)"
   />
+}
+
+@if (importing()) {
+  <app-import-dialog [accounts]="accounts()" (closed)="onImportClosed($event)" />
 }

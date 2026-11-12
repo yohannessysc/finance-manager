@@ -8,4 +8,5 @@ export interface FinancialAccount {
   createdAtUtc: string;
   householdId: string | null;
   isOwner: boolean;
+  isBankLinked?: boolean;
 }

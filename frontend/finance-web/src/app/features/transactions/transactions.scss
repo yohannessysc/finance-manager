@@ -157,6 +157,12 @@ button:disabled {
 }
 
 .count-pill,
+.category-pill.split {
+  background: color-mix(in srgb, var(--fm-primary) 14%, transparent);
+  color: var(--fm-primary);
+  font-weight: 700;
+}
+
 .category-pill,
 .automatic-pill {
   display: inline-block;

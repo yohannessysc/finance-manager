@@ -194,4 +194,26 @@ public class FinancialTransactionRepository
 
         await _context.SaveChangesAsync(ct);
     }
+
+    public Task<List<TransactionSplit>> GetSplitsAsync(
+        IReadOnlyCollection<Guid> transactionIds,
+        CancellationToken ct = default) =>
+        _context.TransactionSplits
+            .AsNoTracking()
+            .Where(x => transactionIds.Contains(x.TransactionId))
+            .OrderByDescending(x => x.Amount)
+            .ToListAsync(ct);
+
+    public async Task ReplaceSplitsAsync(
+        Guid transactionId,
+        IEnumerable<TransactionSplit> splits,
+        CancellationToken ct = default)
+    {
+        var existing = await _context.TransactionSplits
+            .Where(x => x.TransactionId == transactionId)
+            .ToListAsync(ct);
+
+        _context.TransactionSplits.RemoveRange(existing);
+        _context.TransactionSplits.AddRange(splits);
+    }
 }

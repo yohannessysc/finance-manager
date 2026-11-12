@@ -16,6 +16,13 @@ export interface TransactionCategory {
   name: string;
   type: TransactionType;
   createdAtUtc: string;
+  parentCategoryId?: string | null;
+}
+
+export interface SplitLine {
+  categoryId: string;
+  amount: number;
+  note: string | null;
 }
 
 export interface SaveTransactionRequest {
@@ -78,6 +85,14 @@ export class TransactionsService {
     return this.http.put<RecentTransaction>(
       `${this.transactionsUrl}/${id}`,
       request
+    );
+  }
+
+  // An empty list removes the split.
+  setSplits(id: string, lines: SplitLine[]): Observable<RecentTransaction> {
+    return this.http.put<RecentTransaction>(
+      `${this.transactionsUrl}/${id}/splits`,
+      { lines }
     );
   }
 

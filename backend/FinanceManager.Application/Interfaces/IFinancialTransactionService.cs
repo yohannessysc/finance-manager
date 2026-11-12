@@ -29,4 +29,12 @@ public interface IFinancialTransactionService
         Guid id,
         Guid userId,
         CancellationToken ct = default);
+
+    // Splits a transaction across categories; an empty list removes the
+    // split. Returns null when the transaction is not found or not editable.
+    Task<TransactionResponse?> SetSplitsAsync(
+        Guid id,
+        Guid userId,
+        SetSplitsRequest request,
+        CancellationToken ct = default);
 }

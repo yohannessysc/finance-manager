@@ -17,7 +17,8 @@ import {
   Category,
   CategoryTypeOption,
   CategoryUsage,
-  CategoriesService
+  CategoriesService,
+  categoryOptions
 } from '../../core/services/categories.service';
 
 type CategoryTab = 'Expense' | 'Income';
@@ -58,8 +59,30 @@ export class Categories {
       Validators.required,
       Validators.maxLength(150)
     ]],
-    type: ['', Validators.required]
+    type: ['', Validators.required],
+    parentCategoryId: ['']
   });
+
+  // Top-level categories of the form's type that can be a parent.
+  readonly parentOptions = computed(() => {
+    const type = Number(this.formType());
+    const editingId = this.editingId();
+    return this.categories()
+      .filter(c => c.type === type && !c.parentCategoryId && c.id !== editingId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  });
+
+  private readonly formType = signal('');
+
+  // A category with subcategories cannot become a subcategory itself.
+  readonly editingHasChildren = computed(() => {
+    const id = this.editingId();
+    return !!id && this.categories().some(c => c.parentCategoryId === id);
+  });
+
+  parentName(category: Category): string {
+    return this.categories().find(c => c.id === category.parentCategoryId)?.name ?? '';
+  }
 
   readonly usageByCategory = computed(() => {
     return new Map(
@@ -77,12 +100,16 @@ export class Categories {
 
     if (!type) return [];
 
-    return this.categories()
-      .filter(category =>
-        category.type === type.value &&
-        category.name.toLowerCase().includes(query)
-      )
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const ofType = this.categories().filter(category => category.type === type.value);
+
+    if (query) {
+      return ofType
+        .filter(category => category.name.toLowerCase().includes(query))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    // Parents first, each followed by its subcategories.
+    return categoryOptions(ofType).map(option => option.category);
   });
 
   readonly expenseCount = computed(() => this.countFor('Expense'));
@@ -90,6 +117,13 @@ export class Categories {
 
   constructor() {
     this.load();
+    // A different type has different possible parents.
+    this.form.controls.type.valueChanges.subscribe(type => {
+      if (type !== this.formType()) {
+        this.formType.set(type);
+        this.form.controls.parentCategoryId.setValue('');
+      }
+    });
   }
 
   private countFor(tab: CategoryTab): number {
@@ -163,8 +197,11 @@ export class Categories {
     this.editingId.set(null);
     this.form.reset({
       name: '',
-      type: String(type.value)
+      type: String(type.value),
+      parentCategoryId: ''
     });
+    this.formType.set(String(type.value));
+    this.form.controls.parentCategoryId.enable();
 
     this.form.controls.type.enable();
     this.formError.set('');
@@ -176,8 +213,15 @@ export class Categories {
 
     this.form.reset({
       name: category.name,
-      type: String(category.type)
+      type: String(category.type),
+      parentCategoryId: category.parentCategoryId ?? ''
     });
+    this.formType.set(String(category.type));
+    if (this.categories().some(c => c.parentCategoryId === category.id)) {
+      this.form.controls.parentCategoryId.disable();
+    } else {
+      this.form.controls.parentCategoryId.enable();
+    }
 
     this.form.controls.type.disable();
     this.formError.set('');
@@ -214,11 +258,13 @@ export class Categories {
     this.saving.set(true);
     this.formError.set('');
 
+    const parentCategoryId = this.form.controls.parentCategoryId.value || null;
     const request$ = editingId
-      ? this.service.update(editingId, { name })
+      ? this.service.update(editingId, { name, parentCategoryId })
       : this.service.create({
           name,
-          type: Number(this.form.getRawValue().type)
+          type: Number(this.form.getRawValue().type),
+          parentCategoryId
         });
 
     request$
@@ -251,6 +297,8 @@ export class Categories {
           this.editorOpen.set(false);
           this.editingId.set(null);
           this.form.controls.type.enable();
+          // Parent usage (hasSubcategories) may have changed.
+          this.service.getUsage().subscribe({ next: usages => this.usages.set(usages), error: () => {} });
 
           this.notice.set(
             editingId

@@ -27,6 +27,10 @@ public interface ITransactionCategoryRepository
         Guid userId,
         CancellationToken ct = default);
 
+    Task<bool> HasSubcategoriesAsync(
+        Guid categoryId,
+        CancellationToken ct = default);
+
     Task AddAsync(
         TransactionCategory category,
         CancellationToken ct = default);

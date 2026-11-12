@@ -121,38 +121,44 @@ public class DashboardService : IDashboardService
             }
         }
 
-        // 4. Current-month spending grouped by category.
-        var categoryIds = transactions
-            .Where(x => x.CategoryId.HasValue)
-            .Select(x => x.CategoryId!.Value)
-            .Distinct()
-            .ToArray();
-        var categories = await _db.TransactionCategories
-            .AsNoTracking()
-            .Where(c => categoryIds.Contains(c.Id))
-            .ToDictionaryAsync(c => c.Id, c => c.Name, ct);
-
-        var currentExpenses = transactions
-            .Where(t =>
-                t.TransactionDateUtc >= currentMonthStartUtc &&
-                t.TransactionDateUtc < rangeEndUtc &&
-                t.Type == TransactionType.Expense)
-            .Where(t =>
-                accountCurrencies.ContainsKey(
-                    t.FinancialAccountId))
+        // 4. Current-month spending grouped by top-level category
+        // (split lines count separately; subcategories roll up).
+        var currentLines = (await CategoryLineReader.ReadAsync(
+                _db,
+                _db.FinancialTransactions.AsNoTracking().Where(t =>
+                    accessibleAccountIds.Contains(t.FinancialAccountId) &&
+                    t.TransactionDateUtc >= currentMonthStartUtc &&
+                    t.TransactionDateUtc <= nowUtc &&
+                    t.TransactionDateUtc < rangeEndUtc &&
+                    t.Type == TransactionType.Expense),
+                ct))
+            .Where(line => accountCurrencies.ContainsKey(line.AccountId))
             .ToList();
 
-        var groupedExpenses = currentExpenses
-            .GroupBy(t => new
+        var categoryInfo = await CategoryLineReader.ReadCategoriesAsync(
+            _db,
+            currentLines.Select(line => line.CategoryId),
+            ct);
+        var categories = categoryInfo.ToDictionary(x => x.Key, x => x.Value.Name);
+
+        Guid? TopLevel(Guid? id) =>
+            id is { } value &&
+            categoryInfo.TryGetValue(value, out var info) &&
+            info.ParentId is { } parentId
+                ? parentId
+                : id;
+
+        var groupedExpenses = currentLines
+            .GroupBy(line => new
             {
-                Currency = accountCurrencies[t.FinancialAccountId],
-                t.CategoryId
+                Currency = accountCurrencies[line.AccountId],
+                CategoryId = TopLevel(line.CategoryId)
             })
             .Select(g => new
             {
                 g.Key.Currency,
                 g.Key.CategoryId,
-                Amount = g.Sum(t => t.Amount)
+                Amount = g.Sum(line => line.Amount)
             })
             .ToList();
 

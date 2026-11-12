@@ -13,6 +13,10 @@ public class TransactionCategory
 
     public TransactionType Type { get; set; }
 
+    // Set for a subcategory (e.g. Groceries under Food). One level deep:
+    // a parent cannot itself have a parent. Same owner and type.
+    public Guid? ParentCategoryId { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } =
         DateTime.UtcNow;
 }

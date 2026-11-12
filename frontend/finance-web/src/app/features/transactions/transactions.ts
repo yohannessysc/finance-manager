@@ -30,6 +30,8 @@ import {
   TransactionsService,
   TransactionType
 } from './transactions.service';
+import { categoryOptions } from '../../core/services/categories.service';
+import { SplitEditor } from './dialogs/split-editor';
 
 @Component({
   selector: 'app-transactions',
@@ -37,7 +39,8 @@ import {
   imports: [
     CurrencyPipe,
     DatePipe,
-    ReactiveFormsModule
+    ReactiveFormsModule,
+    SplitEditor
   ],
   templateUrl: './transactions.html',
   styleUrl: './transactions.scss'
@@ -67,6 +70,7 @@ export class Transactions implements OnInit {
   readonly showForm = signal(false);
   readonly editingId = signal<string | null>(null);
   readonly transactionToDelete = signal<RecentTransaction | null>(null);
+  readonly splitting = signal<RecentTransaction | null>(null);
 
   readonly transactionForm = this.fb.nonNullable.group({
     type: [TransactionType.Expense, Validators.required],
@@ -85,9 +89,16 @@ export class Transactions implements OnInit {
   readonly filteredCategories = computed(() => {
     const type = Number(this.transactionForm.controls.type.value);
 
-    return this.categories()
-      .filter(category => category.type === type)
-      .sort((a, b) => a.name.localeCompare(b.name));
+    // Subcategories are listed under their parent as "Parent › Child".
+    return categoryOptions(this.categories().filter(category => category.type === type))
+      .map(option => ({ id: option.id, name: option.label }));
+  });
+
+  // The transaction being edited, when it is split across categories.
+  readonly editingSplit = computed(() => {
+    const id = this.editingId();
+    const transaction = id ? this.transactions().find(t => t.id === id) : undefined;
+    return transaction?.splits?.length ? transaction : null;
   });
 
   readonly filteredTransactions = computed(() => {
@@ -114,7 +125,10 @@ export class Transactions implements OnInit {
 
         if (!search) return true;
 
-        const category = this.categoryName(transaction);
+        const category = [
+          this.categoryName(transaction),
+          ...(transaction.splits ?? []).map(line => this.categoryLabel(line.categoryId))
+        ].join(' ');
         const source = this.accountName(
           transaction.financialAccountId
         );
@@ -214,9 +228,34 @@ export class Transactions implements OnInit {
       return 'Transfer';
     }
 
-    return this.categories().find(
-      category => category.id === transaction.categoryId
-    )?.name ?? 'Uncategorized';
+    if (transaction.splits?.length) {
+      return `Split · ${transaction.splits.length} categories`;
+    }
+
+    return transaction.categoryId
+      ? this.categoryLabel(transaction.categoryId)
+      : 'Uncategorized';
+  }
+
+  categoryLabel(categoryId: string): string {
+    return this.categories().find(category => category.id === categoryId)?.name ?? 'Uncategorized';
+  }
+
+  splitSummary(transaction: RecentTransaction): string {
+    return (transaction.splits ?? [])
+      .map(line => `${this.categoryLabel(line.categoryId)}: ${line.amount.toFixed(2)}`)
+      .join(', ');
+  }
+
+  openSplit(transaction: RecentTransaction): void {
+    this.successMessage.set('');
+    this.splitting.set(transaction);
+  }
+
+  onSplitSaved(updated: RecentTransaction): void {
+    this.transactions.update(items => items.map(item => (item.id === updated.id ? updated : item)));
+    this.splitting.set(null);
+    this.successMessage.set(updated.splits?.length ? 'Transaction split.' : 'Split removed.');
   }
 
   typeLabel(type: number): string {

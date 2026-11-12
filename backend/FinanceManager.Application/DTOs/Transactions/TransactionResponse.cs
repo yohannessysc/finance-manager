@@ -14,5 +14,7 @@ public record TransactionResponse(
     string Description,
     string? Merchant,
     DateTime TransactionDateUtc,
-    DateTime CreatedAtUtc
+    DateTime CreatedAtUtc,
+    // Set when the transaction is split across several categories.
+    IReadOnlyList<TransactionSplitResponse>? Splits = null
 );

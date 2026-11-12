@@ -168,7 +168,8 @@
                 </td>
 
                 <td>
-                  <span class="category-pill">
+                  <span class="category-pill" [class.split]="!!transaction.splits?.length"
+                        [attr.title]="transaction.splits?.length ? splitSummary(transaction) : null">
                     {{ categoryName(transaction) }}
                   </span>
                 </td>
@@ -197,6 +198,10 @@
 
                 <td>
                   <div class="row-actions">
+                    @if (transaction.type !== types.Transfer) {
+                      <button type="button" (click)="openSplit(transaction)">Split</button>
+                    }
+
                     @if (transaction.recurringTransactionId) {
                       <span class="automatic-pill">Automatic</span>
                     } @else {
@@ -300,6 +305,9 @@
                 </option>
               }
             </select>
+            @if (editingSplit(); as split) {
+              <small>Split across {{ split.splits?.length }} categories. Choosing a category here replaces the split.</small>
+            }
           </div>
 
           <div class="form-field">
@@ -393,4 +401,14 @@
       </div>
     </section>
   </div>
+}
+
+@if (splitting(); as transaction) {
+  <app-split-editor
+    [transaction]="transaction"
+    [categories]="categories()"
+    [currency]="currencyFor(transaction)"
+    (saved)="onSplitSaved($event)"
+    (closed)="splitting.set(null)"
+  />
 }

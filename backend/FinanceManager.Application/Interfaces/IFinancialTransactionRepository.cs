@@ -44,4 +44,14 @@ public interface IFinancialTransactionRepository
     Task DeleteAsync(
         FinancialTransaction transaction,
         CancellationToken ct = default);
+
+    Task<List<TransactionSplit>> GetSplitsAsync(
+        IReadOnlyCollection<Guid> transactionIds,
+        CancellationToken ct = default);
+
+    // Replaces the transaction's split lines; saved by SaveChangesAsync.
+    Task ReplaceSplitsAsync(
+        Guid transactionId,
+        IEnumerable<TransactionSplit> splits,
+        CancellationToken ct = default);
 }

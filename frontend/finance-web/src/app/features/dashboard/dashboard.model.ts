@@ -40,6 +40,15 @@ export interface RecentTransaction {
   merchant: string | null;
   transactionDateUtc: string;
   createdAtUtc: string;
+  // Present when split across several categories.
+  splits?: TransactionSplit[] | null;
+}
+
+export interface TransactionSplit {
+  id: string;
+  categoryId: string;
+  amount: number;
+  note: string | null;
 }
 
 export interface UpcomingRecurring {

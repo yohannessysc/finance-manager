@@ -359,29 +359,15 @@ public class AuthController : ControllerBase
             UserSessionService.Lifetime,
             HttpContext.RequestAborted);
 
-        // Add session claim to user (required for cookie validation)
-        // First, remove any existing fm_sid claims from previous logins
-        var existingSessionClaims = await _userManager.GetClaimsAsync(user);
-        var oldSessionClaims = existingSessionClaims
-            .Where(c => c.Type == UserSessionService.SessionClaimType)
-            .ToList();
-        
-        foreach (var oldClaim in oldSessionClaims)
-        {
-            await _userManager.RemoveClaimAsync(user, oldClaim);
-        }
-
-        // Add the new session claim
-        var sessionClaim = new System.Security.Claims.Claim(
-            UserSessionService.SessionClaimType,
-            session.Id.ToString());
-        
-        await _userManager.AddClaimAsync(user, sessionClaim);
-
-        // Sign in will now include the fm_sid claim from the user's claims
-        await _signInManager.SignInAsync(
+        // The session id lives only in this device's cookie (never on the
+        // user record), so each device keeps its own session and revoking
+        // one device's session signs out exactly that device.
+        await _signInManager.SignInWithClaimsAsync(
             user,
-            isPersistent: false);
+            isPersistent: false,
+            [new System.Security.Claims.Claim(
+                UserSessionService.SessionClaimType,
+                session.Id.ToString())]);
 
         await _sessions.PurgeOldAsync(
             user.Id,

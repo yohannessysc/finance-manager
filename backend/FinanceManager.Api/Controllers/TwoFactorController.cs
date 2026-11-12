@@ -58,8 +58,8 @@ public sealed class TwoFactorController : ControllerBase
 
         await _users.ResetAuthenticatorKeyAsync(user);
         // Resetting the key rotates the security stamp; re-issue this
-        // session's cookie so the user stays signed in.
-        await _signIn.RefreshSignInAsync(user);
+        // device's cookie (keeping its session) so it stays signed in.
+        await _signIn.RefreshSignInKeepingSessionAsync(user, User);
 
         var key = await _users.GetAuthenticatorKeyAsync(user) ?? string.Empty;
         var label = Uri.EscapeDataString($"{Issuer}:{user.Email}");
@@ -89,7 +89,7 @@ public sealed class TwoFactorController : ControllerBase
 
         await _users.SetTwoFactorEnabledAsync(user, true);
         var codes = await _users.GenerateNewTwoFactorRecoveryCodesAsync(user, RecoveryCodeCount);
-        await _signIn.RefreshSignInAsync(user);
+        await _signIn.RefreshSignInKeepingSessionAsync(user, User);
 
         return Ok(new { recoveryCodes = codes });
     }
@@ -106,7 +106,7 @@ public sealed class TwoFactorController : ControllerBase
 
         await _users.SetTwoFactorEnabledAsync(user, false);
         await _users.ResetAuthenticatorKeyAsync(user);
-        await _signIn.RefreshSignInAsync(user);
+        await _signIn.RefreshSignInKeepingSessionAsync(user, User);
 
         return NoContent();
     }

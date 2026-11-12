@@ -268,6 +268,14 @@ builder.Services.Configure<SecurityStampValidatorOptions>(
     options =>
     {
         options.ValidationInterval = TimeSpan.Zero;
+
+        // Validation rebuilds the principal from the user record, which
+        // does not hold the per-device session id; carry it over.
+        options.OnRefreshingPrincipal = context =>
+        {
+            FinanceManager.Api.SessionClaims.CopySessionId(context.CurrentPrincipal, context.NewPrincipal);
+            return Task.CompletedTask;
+        };
     });
 
 // ---------------------------------------

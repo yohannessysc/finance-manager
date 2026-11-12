@@ -535,3 +535,6 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 }).AllowAnonymous();
 
 app.Run();
+
+// Lets the integration tests host the app with WebApplicationFactory.
+public partial class Program;

@@ -39,6 +39,7 @@ them all.
 | `DataProtection__CertificatePath` / `__CertificatePassword` | yes | See below. The API refuses to start without it |
 | `Resend__ApiKey`, `Resend__From` | yes | `From` must use your verified domain |
 | `Plaid__ClientId`, `Plaid__Secret`, `Plaid__Environment` | yes | `production` once Plaid approves you |
+| `Plaid__WebhookUrl` | recommended | `https://<domain>/api/v1/bank/plaid/webhook`. New transactions sync within seconds and expired bank logins are flagged immediately; the scheduled sync remains as a fallback. Applies to banks linked or reconnected after it is set |
 | `Billing__StripeSecretKey`, `Billing__StripeWebhookSecret`, `Billing__*__MonthlyPriceId` | yes | Webhook URL: `https://<domain>/api/v1/billing/webhook` with `checkout.session.completed` and `customer.subscription.*` |
 | `Sentry__Dsn` | recommended | Error tracking; off when empty |
 | `ForwardedHeaders__ForwardLimit` | if needed | Number of proxies in front of the API (default 1: nginx). Use 2 when a load balancer sits in front of nginx |

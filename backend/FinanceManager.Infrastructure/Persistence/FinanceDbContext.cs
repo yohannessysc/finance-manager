@@ -736,6 +736,9 @@ public class FinanceDbContext
             entity.Property(x => x.PlaidItemId)
                 .HasMaxLength(100);
 
+            // Plaid webhooks identify the connection by item id.
+            entity.HasIndex(x => x.PlaidItemId);
+
             entity.Property(x => x.TransactionsCursor)
                 .HasMaxLength(1000);
 

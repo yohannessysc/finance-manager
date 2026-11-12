@@ -21,4 +21,11 @@ public class PlaidOptions
 
     /// <summary>Android package name for Plaid Link iOS</summary>
     public string? AndroidPackageName { get; set; }
+
+    /// <summary>
+    /// Public HTTPS URL Plaid posts webhooks to, e.g.
+    /// https://app.example.com/api/v1/bank/plaid/webhook. Optional: without it
+    /// the scheduled sync still picks up changes.
+    /// </summary>
+    public string? WebhookUrl { get; set; }
 }

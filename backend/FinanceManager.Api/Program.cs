@@ -441,6 +441,9 @@ builder.Services.AddHttpClient<FinanceManager.Infrastructure.Services.Plaid.IPla
     FinanceManager.Infrastructure.Services.Plaid.PlaidService>();
 
 builder.Services.AddScoped<IBankConnectionService, BankConnectionService>();
+builder.Services.AddSingleton<IBankSyncQueue, BankSyncQueue>();
+builder.Services.AddScoped<FinanceManager.Infrastructure.Services.Plaid.PlaidWebhookVerifier>();
+builder.Services.AddScoped<FinanceManager.Infrastructure.Services.Plaid.PlaidWebhookHandler>();
 builder.Services.AddScoped<IBankSyncService, BankSyncService>();
 builder.Services.AddScoped<ICategoryRuleService, CategoryRuleService>();
 
@@ -464,6 +467,8 @@ builder.Services.AddHostedService<
 
 builder.Services.AddHostedService<
     SavingsGoalBackgroundService>();
+
+builder.Services.AddHostedService<BankSyncQueueWorker>();
 
 // ---------------------------------------
 // 12. Authorization

@@ -47,6 +47,11 @@ public interface IPlaidService
     Task RemoveItemAsync(string accessToken);
 
     /// <summary>
+    /// Public key (JWK) Plaid used to sign a webhook, by the JWT's key id.
+    /// </summary>
+    Task<PlaidWebhookKey> GetWebhookVerificationKeyAsync(string keyId, CancellationToken ct = default);
+
+    /// <summary>
     /// Incremental transaction sync (/transactions/sync). Pass the stored cursor
     /// (null for the first sync). Follows has_more pages internally.
     /// </summary>
@@ -225,6 +230,9 @@ public class PlaidService : IPlaidService
                 request["products"] = new[] { "auth", "transactions" };
             else
                 request["access_token"] = accessToken;
+
+            if (!string.IsNullOrWhiteSpace(_options.WebhookUrl))
+                request["webhook"] = _options.WebhookUrl;
 
             var response = await _httpClient.PostAsJsonAsync("/link/token/create", request);
             await EnsurePlaidSuccessAsync(response);
@@ -562,6 +570,29 @@ public class PlaidService : IPlaidService
             _logger.LogError(ex, "Failed to remove Plaid item");
             throw;
         }
+    }
+
+    public async Task<PlaidWebhookKey> GetWebhookVerificationKeyAsync(
+        string keyId,
+        CancellationToken ct = default)
+    {
+        var response = await _httpClient.PostAsJsonAsync(
+            "/webhook_verification_key/get",
+            new { client_id = _options.ClientId, secret = _options.Secret, key_id = keyId },
+            ct);
+        await EnsurePlaidSuccessAsync(response);
+
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        var key = doc.RootElement.GetProperty("key");
+
+        return new PlaidWebhookKey(
+            key.GetProperty("kid").GetString() ?? keyId,
+            key.GetProperty("crv").GetString() ?? "",
+            key.GetProperty("x").GetString() ?? "",
+            key.GetProperty("y").GetString() ?? "",
+            key.TryGetProperty("expired_at", out var expired) && expired.ValueKind == JsonValueKind.Number
+                ? expired.GetInt64()
+                : null);
     }
 
     /// <summary>

@@ -46,6 +46,27 @@ public sealed class SavingsGoalBackgroundService : BackgroundService
     private async Task ProcessSafelyAsync(
         CancellationToken cancellationToken)
     {
+        // With several app instances only one runs the jobs per tick, so
+        // milestone emails are never sent twice.
+        IAsyncDisposable? lease;
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            lease = await scope.ServiceProvider
+                .GetRequiredService<IJobLock>()
+                .TryAcquireAsync("savings-goals", cancellationToken);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogError(ex, "Could not acquire the savings goal job lock.");
+            return;
+        }
+
+        if (lease is null)
+            return;
+
+        await using var _ = lease;
+
         // Contributions run first so milestones they cross are
         // announced in the same pass. Each step fails independently.
         await RunStepAsync(

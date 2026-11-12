@@ -405,6 +405,8 @@ builder.Services.AddHttpClient<
 // ---------------------------------------
 // 11. Background Services
 // ---------------------------------------
+builder.Services.AddSingleton<IJobLock, PostgresJobLock>();
+
 builder.Services.AddHostedService<
     RecurringPostingBackgroundService>();
 

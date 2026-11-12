@@ -140,27 +140,10 @@ builder.Services.ConfigureApplicationCookie(options =>
 
     options.Events.OnValidatePrincipal = async context =>
     {
-        var logger = context.HttpContext.RequestServices
-            .GetRequiredService<ILogger<Program>>();
-
-        var path = context.HttpContext.Request.Path;
-        logger.LogInformation(
-            "OnValidatePrincipal START: path={path}, method={method}",
-            path,
-            context.HttpContext.Request.Method);
-
         await validateSecurityStamp(context);
 
         if (context.Principal is null)
-        {
-            logger.LogWarning(
-                "OnValidatePrincipal: Principal is null after security-stamp validation");
             return;
-        }
-
-        logger.LogInformation(
-            "OnValidatePrincipal: Principal has {claimCount} claims",
-            context.Principal.Claims.Count());
 
         var sessionClaim = context.Principal
             .FindFirst(UserSessionService.SessionClaimType)?.Value;
@@ -169,48 +152,22 @@ builder.Services.ConfigureApplicationCookie(options =>
             .FindFirst(System.Security.Claims.ClaimTypes
                 .NameIdentifier)?.Value;
 
-        logger.LogInformation(
-            "OnValidatePrincipal: sessionClaim={sessionClaim}, userClaim={userClaim}",
-            sessionClaim ?? "(null)",
-            userClaim ?? "(null)");
-
-        var valid = false;
-
-        if (Guid.TryParse(sessionClaim, out var sessionId) &&
-            Guid.TryParse(userClaim, out var userId))
-        {
-            var sessions = context.HttpContext.RequestServices
-                .GetRequiredService<UserSessionService>();
-
-            valid = await sessions.ValidateAsync(
-                sessionId,
-                userId,
-                context.HttpContext.RequestAborted);
-
-            logger.LogInformation(
-                "OnValidatePrincipal: ValidateAsync returned {valid}",
-                valid);
-        }
-        else
-        {
-            logger.LogWarning(
-                "OnValidatePrincipal: Failed to parse session/user GUIDs");
-        }
+        var valid =
+            Guid.TryParse(sessionClaim, out var sessionId) &&
+            Guid.TryParse(userClaim, out var userId) &&
+            await context.HttpContext.RequestServices
+                .GetRequiredService<UserSessionService>()
+                .ValidateAsync(
+                    sessionId,
+                    userId,
+                    context.HttpContext.RequestAborted);
 
         if (!valid)
         {
-            logger.LogWarning(
-                "OnValidatePrincipal: Session validation failed, rejecting principal");
-
             context.RejectPrincipal();
 
             await context.HttpContext.SignOutAsync(
                 IdentityConstants.ApplicationScheme);
-        }
-        else
-        {
-            logger.LogInformation(
-                "OnValidatePrincipal: Session validation PASSED");
         }
     };
 
@@ -476,8 +433,25 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+else
+{
+    app.UseHsts();
+}
 
 app.UseHttpsRedirection();
+
+// The API only ever returns JSON, so it can deny everything a browser
+// might otherwise do with a response.
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers.XContentTypeOptions = "nosniff";
+    headers.XFrameOptions = "DENY";
+    headers["Referrer-Policy"] = "no-referrer";
+    headers.ContentSecurityPolicy = "default-src 'none'; frame-ancestors 'none'";
+    headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    await next();
+});
 
 app.UseRouting();
 

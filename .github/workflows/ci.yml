@@ -26,6 +26,14 @@ jobs:
       - name: Build and test
         run: dotnet test backend/FinanceManager.slnx --no-restore --configuration Release
 
+      - name: Check for vulnerable packages
+        run: |
+          dotnet list backend/FinanceManager.slnx package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "::error::Vulnerable NuGet packages found"
+            exit 1
+          fi
+
   frontend:
     name: Frontend checks
     runs-on: ubuntu-latest
@@ -45,6 +53,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Production dependencies only: dev tooling never ships to users.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Test
         run: npm test -- --watch=false

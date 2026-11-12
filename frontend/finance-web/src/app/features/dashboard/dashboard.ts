@@ -13,10 +13,12 @@ import {
   RecentTransaction
 } from './dashboard.model';
 
+import { GettingStarted } from './getting-started/getting-started';
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CurrencyPipe, DatePipe, DecimalPipe, RouterLink],
+  imports: [CurrencyPipe, DatePipe, DecimalPipe, RouterLink, GettingStarted],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss'
 })

@@ -1,0 +1,25 @@
+<section class="hero compact">
+  <span class="eyebrow">PRICING</span>
+  <h1>Simple plans. Cancel any time.</h1>
+  <p>Start free. Upgrade from inside the app whenever you want automatic bank sync.</p>
+</section>
+
+<section class="plan-grid" aria-label="Plans">
+  @for (plan of plans; track plan.plan) {
+    <article class="card plan">
+      <h2>{{ plan.name }}</h2>
+      <p class="price">{{ plan.price }}</p>
+      <p class="tagline">{{ plan.tagline }}</p>
+      <ul>
+        @for (feature of plan.features; track feature) {
+          <li>{{ feature }}</li>
+        }
+      </ul>
+      <a routerLink="/register" class="button" [class.primary]="plan.plan !== 0" [class.secondary]="plan.plan === 0">
+        {{ plan.plan === 0 ? 'Start free' : 'Start with ' + plan.name }}
+      </a>
+    </article>
+  }
+</section>
+
+<p class="fine-print">Prices in CAD. Paid plans are billed monthly through Stripe and can be cancelled from the Billing page.</p>

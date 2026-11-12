@@ -31,6 +31,13 @@
       <button type="button" (click)="loadDashboard()">Retry</button>
     </div>
   } @else {
+    @if (data(); as summary) {
+      <app-getting-started
+        [accountCount]="summary.accounts.length"
+        [transactionCount]="summary.recentTransactions.length"
+      />
+    }
+
     <div class="summary-grid">
       <article class="summary-card balance-card">
         <div class="card-caption">Total balance</div>

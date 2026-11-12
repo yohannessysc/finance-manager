@@ -9,14 +9,7 @@ import {
   BillingStatus,
   SubscriptionPlan
 } from '../../core/billing/billing.service';
-
-interface PlanCard {
-  plan: SubscriptionPlan;
-  name: string;
-  // Display only. Stripe prices are the source of truth: keep in sync.
-  price: string;
-  features: string[];
-}
+import { PLANS } from '../../core/billing/plans';
 
 @Component({
   selector: 'app-billing',
@@ -30,26 +23,7 @@ export class Billing implements OnInit {
   private readonly route = inject(ActivatedRoute);
 
   readonly Plan = SubscriptionPlan;
-  readonly plans: PlanCard[] = [
-    {
-      plan: SubscriptionPlan.Free,
-      name: 'Free',
-      price: '$0',
-      features: ['Manual accounts and transactions', 'CSV import', 'Budgets and savings goals', 'Household sharing']
-    },
-    {
-      plan: SubscriptionPlan.Bank,
-      name: 'Bank',
-      price: '$8.99/month',
-      features: ['Everything in Free', 'Automatic bank connections', 'Transactions sync every 15 minutes', 'Linked-account savings goals']
-    },
-    {
-      plan: SubscriptionPlan.Premium,
-      name: 'Premium',
-      price: '$14.99/month',
-      features: ['Everything in Bank', 'AI insights and suggestions (coming soon)']
-    }
-  ];
+  readonly plans = PLANS;
 
   readonly status = signal<BillingStatus | null>(null);
   readonly loading = signal(true);

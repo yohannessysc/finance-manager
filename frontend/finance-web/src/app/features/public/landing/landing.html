@@ -1,0 +1,27 @@
+<section class="hero">
+  <span class="eyebrow">PERSONAL FINANCE, ORGANISED</span>
+  <h1>Know where your money is going, and where it can take you.</h1>
+  <p>
+    Accounts, budgets, recurring bills and savings goals in one calm workspace.
+    Start free and add automatic bank sync when you want it.
+  </p>
+  <div class="hero-actions">
+    <a routerLink="/register" class="button primary">Create a free account</a>
+    <a routerLink="/pricing" class="button secondary">See pricing</a>
+  </div>
+</section>
+
+<section class="feature-grid" aria-label="Features">
+  @for (feature of features; track feature.title) {
+    <article class="card">
+      <h2>{{ feature.title }}</h2>
+      <p>{{ feature.text }}</p>
+    </article>
+  }
+</section>
+
+<section class="closing card">
+  <h2>Free to start. No card needed.</h2>
+  <p>Track everything by hand on the free plan for as long as you like.</p>
+  <a routerLink="/register" class="button primary">Get started</a>
+</section>

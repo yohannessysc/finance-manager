@@ -1,0 +1,32 @@
+@if (visible()) {
+  <section class="getting-started" aria-labelledby="getting-started-title">
+    <header>
+      <div>
+        <span class="eyebrow">GETTING STARTED</span>
+        <h2 id="getting-started-title">Set up your workspace</h2>
+        <p>{{ completed() }} of {{ steps().length }} done</p>
+      </div>
+      <button type="button" class="dismiss" (click)="dismiss()">Hide</button>
+    </header>
+
+    <div class="progress" role="progressbar"
+         [attr.aria-valuenow]="completed()" aria-valuemin="0" [attr.aria-valuemax]="steps().length">
+      <div [style.width.%]="completed() / steps().length * 100"></div>
+    </div>
+
+    <ol>
+      @for (step of steps(); track step.title) {
+        <li [class.done]="step.done">
+          <span class="check" aria-hidden="true">{{ step.done ? '✓' : '' }}</span>
+          <div>
+            <strong>{{ step.title }}@if (step.optional) {<span class="optional"> · optional</span>}</strong>
+            <p>{{ step.description }}</p>
+          </div>
+          @if (!step.done) {
+            <a [routerLink]="step.link">{{ step.action }}</a>
+          }
+        </li>
+      }
+    </ol>
+  </section>
+}

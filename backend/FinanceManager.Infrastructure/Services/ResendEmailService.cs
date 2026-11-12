@@ -350,4 +350,66 @@ public sealed class ResendEmailService : IEmailService
             "Household invitation email accepted by provider.");
     }
 
+    public async Task SendSavingsGoalMilestoneAsync(
+        string email,
+        string goalName,
+        int milestonePercent,
+        CancellationToken ct = default)
+    {
+        var apiKey = _configuration["Resend:ApiKey"];
+        var from = _configuration["Resend:From"];
+        if (string.IsNullOrWhiteSpace(apiKey) ||
+            string.IsNullOrWhiteSpace(from))
+        {
+            throw new InvalidOperationException(
+                "Resend email configuration is missing.");
+        }
+
+        var safeGoalName = HtmlEncoder.Default.Encode(goalName);
+        var headline = milestonePercent >= 100
+            ? "Goal reached!"
+            : $"You're {milestonePercent}% of the way there";
+        var body = milestonePercent >= 100
+            ? $"You have fully funded <strong>{safeGoalName}</strong>. Nice work."
+            : $"Your savings goal <strong>{safeGoalName}</strong> just passed {milestonePercent}%. Keep it going.";
+        var html = $"""
+            <div style="font-family:Arial,sans-serif;
+                        max-width:520px;margin:40px auto;
+                        padding:32px;border-radius:16px;
+                        background:#ffffff;">
+              <h2 style="color:#123b32;">{headline}</h2>
+              <p style="color:#64748b;line-height:1.7;">{body}</p>
+              <p style="color:#64748b;font-size:13px;">
+                You can turn off these emails in the goal's settings.
+              </p>
+            </div>
+            """;
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "https://api.resend.com/emails");
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", apiKey);
+        request.Content = JsonContent.Create(new
+        {
+            from,
+            to = new[] { email },
+            subject = milestonePercent >= 100
+                ? $"{goalName}: goal reached"
+                : $"{goalName}: {milestonePercent}% saved",
+            html
+        });
+
+        using var response = await _http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError(
+                "Savings goal milestone email failed with status {StatusCode}.",
+                (int)response.StatusCode);
+            throw new HttpRequestException(
+                "Savings goal milestone email delivery failed.",
+                null,
+                response.StatusCode);
+        }
+    }
 }

@@ -144,10 +144,11 @@ h1 {
   font-weight: 700;
 }
 
-.goal-form-card input,
+.goal-form-card input:not([type='checkbox']),
 .goal-form-card select,
 .contribution-form input {
   width: 100%;
+  min-width: 0;
   min-height: 42px;
   padding: 9px 11px;
   border: 1px solid var(--fm-border);
@@ -265,4 +266,132 @@ h1 {
   .page-heading {
     align-items: flex-start;
   }
+}
+
+.goal-badges,
+.member-totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.status-badge,
+.scope-badge {
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.status-badge {
+  background: var(--fm-primary-soft);
+  color: var(--fm-primary);
+}
+
+.status-badge.behind {
+  background: rgba(180, 35, 24, 0.12);
+  color: #b42318;
+}
+
+.status-badge.done {
+  background: var(--fm-primary);
+  color: #ffffff;
+}
+
+.scope-badge {
+  background: var(--fm-hover);
+  color: var(--fm-muted);
+  font-weight: 600;
+}
+
+.goal-insights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
+}
+
+.goal-insights div {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--fm-background);
+}
+
+.goal-insights dt {
+  color: var(--fm-muted);
+  font-size: 11px;
+}
+
+.goal-insights dd {
+  margin: 4px 0 0;
+  font-weight: 800;
+}
+
+.goal-details {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--fm-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.progress-chart {
+  display: block;
+  width: 100%;
+  height: 80px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: var(--fm-background);
+}
+
+.progress-chart polyline {
+  fill: none;
+  stroke: var(--fm-primary);
+  stroke-width: 2;
+}
+
+.member-totals {
+  margin-bottom: 10px;
+  color: var(--fm-muted);
+  font-size: 13px;
+}
+
+.goal-form-card .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.goal-form-card .checkbox-label input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.goal-form-card .checkbox-label span {
+  font-weight: 600;
+}
+
+.schedule-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+// Grid items default to min-width: auto, which lets wide native
+// controls (date inputs) push past the column.
+.schedule-fields label,
+.contribution-form label {
+  min-width: 0;
+}
+
+.hint {
+  margin: -8px 0 0;
+  color: var(--fm-muted);
+  font-size: 12px;
 }

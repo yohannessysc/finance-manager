@@ -18,6 +18,10 @@ import {
   csrfInterceptor
 } from './core/auth/csrf.interceptor';
 
+import {
+  sessionExpiredInterceptor
+} from './core/auth/session-expired.interceptor';
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
@@ -26,7 +30,8 @@ export const appConfig: ApplicationConfig = {
 
     provideHttpClient(
       withInterceptors([
-        csrfInterceptor
+        csrfInterceptor,
+        sessionExpiredInterceptor
       ])
     )
   ]

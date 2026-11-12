@@ -14,5 +14,14 @@ public class FinancialAccount
 
     public decimal OpeningBalance { get; set; }
 
+    /// <summary>Bank connection this account is synced from (null = manual account)</summary>
+    public Guid? BankConnectionId { get; set; }
+
+    /// <summary>Provider's account id (Plaid account_id) for synced accounts</summary>
+    public string? ExternalAccountId { get; set; }
+
+    /// <summary>Last digits of the bank account number, for display</summary>
+    public string? Mask { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }

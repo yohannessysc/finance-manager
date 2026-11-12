@@ -34,6 +34,13 @@ public class RecurringTransaction
 
     public DateTime? EndDateUtc { get; set; }
 
+    /// <summary>
+    /// Set when this schedule was detected from bank data (Plaid stream_id).
+    /// Bank-detected schedules are informational only: the real transactions
+    /// arrive through bank sync, so they must never be auto-posted.
+    /// </summary>
+    public string? ExternalStreamId { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } =
         DateTime.UtcNow;
 }

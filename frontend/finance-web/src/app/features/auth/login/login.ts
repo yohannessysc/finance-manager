@@ -69,7 +69,12 @@ export class Login {
           this.error.set('');
           this.needsVerification.set(false);
 
-          this.router.navigateByUrl('/dashboard');
+          // Only allow in-app paths to avoid open redirects
+          const returnUrl = this.router.parseUrl(this.router.url).queryParams['returnUrl'];
+          const target = typeof returnUrl === 'string' && returnUrl.startsWith('/') && !returnUrl.startsWith('//')
+            ? returnUrl
+            : '/dashboard';
+          this.router.navigateByUrl(target);
         },
 
         error: err => {

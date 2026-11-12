@@ -53,6 +53,10 @@ public sealed class SavingsGoalsController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpPut("{id:guid}")]
@@ -75,6 +79,10 @@ public sealed class SavingsGoalsController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpDelete("{id:guid}")]
@@ -85,9 +93,16 @@ public sealed class SavingsGoalsController : ControllerBase
         if (userId is null)
             return Unauthorized();
 
-        return await _goals.DeleteAsync(id, userId.Value, ct)
-            ? NoContent()
-            : NotFound();
+        try
+        {
+            return await _goals.DeleteAsync(id, userId.Value, ct)
+                ? NoContent()
+                : NotFound();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpGet("{id:guid}/contributions")]
@@ -133,6 +148,10 @@ public sealed class SavingsGoalsController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpDelete("{id:guid}/contributions/{contributionId:guid}")]
@@ -146,13 +165,20 @@ public sealed class SavingsGoalsController : ControllerBase
         if (userId is null)
             return Unauthorized();
 
-        return await _goals.DeleteContributionAsync(
-            id,
-            contributionId,
-            userId.Value,
-            ct)
-            ? NoContent()
-            : NotFound();
+        try
+        {
+            return await _goals.DeleteContributionAsync(
+                id,
+                contributionId,
+                userId.Value,
+                ct)
+                ? NoContent()
+                : NotFound();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     private Guid? GetUserId()

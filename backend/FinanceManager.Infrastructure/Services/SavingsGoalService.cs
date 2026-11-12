@@ -1,6 +1,8 @@
 using FinanceManager.Application.DTOs.SavingsGoals;
 using FinanceManager.Application.Interfaces;
+using FinanceManager.Application.Services;
 using FinanceManager.Domain.Entities;
+using FinanceManager.Domain.Enums;
 using FinanceManager.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -10,37 +12,49 @@ namespace FinanceManager.Infrastructure.Services;
 public sealed class SavingsGoalService : ISavingsGoalService
 {
     private const decimal MaximumAmount = 9999999999999999.99m;
+    private const int MaximumEmergencyFundMonths = 24;
 
     private readonly FinanceDbContext _db;
+    private readonly IHouseholdAuthorizationService _householdAuthorization;
+    private readonly SavingsGoalProgressReader _progress;
 
-    public SavingsGoalService(FinanceDbContext db)
+    public SavingsGoalService(
+        FinanceDbContext db,
+        IHouseholdAuthorizationService householdAuthorization)
     {
         _db = db;
+        _householdAuthorization = householdAuthorization;
+        _progress = new SavingsGoalProgressReader(db);
     }
 
     public async Task<List<SavingsGoalResponse>> GetAllAsync(
         Guid userId,
         CancellationToken ct = default)
     {
+        var householdIds = await _householdAuthorization
+            .GetHouseholdIdsAsync(userId, ct);
+
         var goals = await _db.SavingsGoals
             .AsNoTracking()
-            .Where(x => x.UserId == userId)
+            .Where(x =>
+                x.UserId == userId ||
+                (x.HouseholdId.HasValue &&
+                 householdIds.Contains(x.HouseholdId.Value)))
             .OrderBy(x => x.CreatedAtUtc)
             .ToListAsync(ct);
 
-        var totals = await _db.SavingsGoalContributions
-            .AsNoTracking()
-            .Where(x => x.UserId == userId)
-            .GroupBy(x => x.SavingsGoalId)
-            .Select(x => new
-            {
-                GoalId = x.Key,
-                Total = x.Sum(y => y.Amount)
-            })
-            .ToDictionaryAsync(x => x.GoalId, x => x.Total, ct);
+        var progress = await _progress.ReadAsync(goals, DateTime.UtcNow, ct);
+        var results = new List<SavingsGoalResponse>(goals.Count);
 
-        return goals.Select(goal =>
-            ToResponse(goal, totals.GetValueOrDefault(goal.Id))).ToList();
+        foreach (var goal in goals)
+        {
+            results.Add(ToResponse(
+                goal,
+                progress[goal.Id],
+                await CanEditAsync(goal, userId, ct)));
+        }
+
+        return results;
     }
 
     public async Task<SavingsGoalResponse> CreateAsync(
@@ -51,26 +65,53 @@ public sealed class SavingsGoalService : ISavingsGoalService
         ValidateName(request.Name);
         ValidateAmount(request.TargetAmount, "Target amount");
         ValidateTargetDate(request.TargetDateUtc);
+        ValidateGoalType(request.GoalType, request.EmergencyFundMonths);
 
         var currency = NormalizeCurrency(request.Currency);
         await EnsureUserHasCurrencyAccountAsync(userId, currency, ct);
+
+        if (request.HouseholdId is { } householdId &&
+            !await _householdAuthorization.CanEditAsync(userId, householdId, ct))
+        {
+            throw new UnauthorizedAccessException(
+                "Your household role does not allow shared savings goal changes.");
+        }
 
         var now = DateTime.UtcNow;
         var goal = new SavingsGoal
         {
             UserId = userId,
+            HouseholdId = request.HouseholdId,
             Name = request.Name.Trim(),
             Currency = currency,
+            GoalType = request.GoalType,
+            EmergencyFundMonths = request.EmergencyFundMonths,
             TargetAmount = request.TargetAmount,
             TargetDateUtc = request.TargetDateUtc,
+            NotificationsEnabled = request.NotificationsEnabled,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
 
+        await ApplyTrackingAsync(
+            goal,
+            request.LinkedAccountId,
+            request.AutoContributionAmount,
+            request.AutoContributionFrequency,
+            request.AutoContributionStartUtc,
+            ct);
+
+        var progress = await ReadProgressAsync(goal, ct);
+
+        // Only milestones crossed from here on are worth announcing;
+        // a goal linked to a well-funded account starts part way.
+        goal.LastMilestoneNotified = SavingsGoalProjectionCalculator
+            .MilestoneFor(progress.AmountSaved, progress.TargetAmount);
+
         _db.SavingsGoals.Add(goal);
         await _db.SaveChangesAsync(ct);
 
-        return ToResponse(goal, 0);
+        return ToResponse(goal, progress, canEdit: true);
     }
 
     public async Task<SavingsGoalResponse?> UpdateAsync(
@@ -79,10 +120,7 @@ public sealed class SavingsGoalService : ISavingsGoalService
         SavingsGoalUpdateRequest request,
         CancellationToken ct = default)
     {
-        var goal = await _db.SavingsGoals
-            .SingleOrDefaultAsync(
-                x => x.Id == id && x.UserId == userId,
-                ct);
+        var goal = await FindEditableAsync(id, userId, ct);
 
         if (goal is null)
             return null;
@@ -90,16 +128,35 @@ public sealed class SavingsGoalService : ISavingsGoalService
         ValidateName(request.Name);
         ValidateAmount(request.TargetAmount, "Target amount");
         ValidateTargetDate(request.TargetDateUtc);
+        ValidateGoalType(goal.GoalType, request.EmergencyFundMonths);
 
         goal.Name = request.Name.Trim();
         goal.TargetAmount = request.TargetAmount;
         goal.TargetDateUtc = request.TargetDateUtc;
+        goal.EmergencyFundMonths = request.EmergencyFundMonths;
+        goal.NotificationsEnabled = request.NotificationsEnabled;
+
+        await ApplyTrackingAsync(
+            goal,
+            request.LinkedAccountId,
+            request.AutoContributionAmount,
+            request.AutoContributionFrequency,
+            request.AutoContributionStartUtc,
+            ct);
+
+        var progress = await ReadProgressAsync(goal, ct);
+
+        // If a bigger target pulled progress back, milestones can be
+        // announced again when they are re-crossed. Pending ones are kept.
+        goal.LastMilestoneNotified = Math.Min(
+            goal.LastMilestoneNotified,
+            SavingsGoalProjectionCalculator.MilestoneFor(
+                progress.AmountSaved,
+                progress.TargetAmount));
         goal.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
-
-        var saved = await GetSavedAmountAsync(id, userId, ct);
-        return ToResponse(goal, saved);
+        return ToResponse(goal, progress, canEdit: true);
     }
 
     public async Task<bool> DeleteAsync(
@@ -107,10 +164,7 @@ public sealed class SavingsGoalService : ISavingsGoalService
         Guid userId,
         CancellationToken ct = default)
     {
-        var goal = await _db.SavingsGoals
-            .SingleOrDefaultAsync(
-                x => x.Id == id && x.UserId == userId,
-                ct);
+        var goal = await FindEditableAsync(id, userId, ct);
 
         if (goal is null)
             return false;
@@ -125,17 +179,27 @@ public sealed class SavingsGoalService : ISavingsGoalService
         Guid userId,
         CancellationToken ct = default)
     {
-        var goalExists = await _db.SavingsGoals
-            .AnyAsync(x => x.Id == goalId && x.UserId == userId, ct);
-
-        if (!goalExists)
+        if (await FindAccessibleAsync(goalId, userId, ct) is null)
             return null;
 
-        return await _db.SavingsGoalContributions
-            .AsNoTracking()
-            .Where(x => x.SavingsGoalId == goalId && x.UserId == userId)
-            .OrderByDescending(x => x.ContributionDateUtc)
-            .Select(x => ToContributionResponse(x))
+        return await (
+            from contribution in _db.SavingsGoalContributions.AsNoTracking()
+            where contribution.SavingsGoalId == goalId
+            join user in _db.Users.AsNoTracking()
+                on contribution.UserId equals user.Id into users
+            from user in users.DefaultIfEmpty()
+            orderby contribution.ContributionDateUtc descending,
+                contribution.CreatedAtUtc descending
+            select new SavingsGoalContributionResponse(
+                contribution.Id,
+                contribution.SavingsGoalId,
+                contribution.Amount,
+                contribution.ContributionDateUtc,
+                contribution.Note,
+                contribution.CreatedAtUtc,
+                contribution.UserId,
+                user == null ? null : user.Email,
+                contribution.ScheduledOccurrenceUtc != null))
             .ToListAsync(ct);
     }
 
@@ -157,13 +221,16 @@ public sealed class SavingsGoalService : ISavingsGoalService
         if (request.Note?.Trim().Length > 250)
             throw new ArgumentException("Contribution note cannot exceed 250 characters.");
 
-        var goal = await _db.SavingsGoals
-            .SingleOrDefaultAsync(
-                x => x.Id == goalId && x.UserId == userId,
-                ct);
+        var goal = await FindEditableAsync(goalId, userId, ct);
 
         if (goal is null)
             return null;
+
+        if (goal.LinkedAccountId is not null)
+        {
+            throw new ArgumentException(
+                "This goal tracks its linked account balance. Deposit into that account instead.");
+        }
 
         _db.SavingsGoalContributions.Add(new SavingsGoalContribution
         {
@@ -178,8 +245,7 @@ public sealed class SavingsGoalService : ISavingsGoalService
         goal.UpdatedAtUtc = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
 
-        var saved = await GetSavedAmountAsync(goalId, userId, ct);
-        return ToResponse(goal, saved);
+        return ToResponse(goal, await ReadProgressAsync(goal, ct), canEdit: true);
     }
 
     public async Task<bool> DeleteContributionAsync(
@@ -188,35 +254,190 @@ public sealed class SavingsGoalService : ISavingsGoalService
         Guid userId,
         CancellationToken ct = default)
     {
+        var goal = await FindEditableAsync(goalId, userId, ct);
+
+        if (goal is null)
+            return false;
+
         var contribution = await _db.SavingsGoalContributions
             .SingleOrDefaultAsync(
-                x => x.Id == contributionId &&
-                     x.SavingsGoalId == goalId &&
-                     x.UserId == userId,
+                x => x.Id == contributionId && x.SavingsGoalId == goalId,
                 ct);
 
         if (contribution is null)
             return false;
 
         _db.SavingsGoalContributions.Remove(contribution);
-
-        var goal = await _db.SavingsGoals
-            .SingleAsync(x => x.Id == goalId && x.UserId == userId, ct);
         goal.UpdatedAtUtc = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(ct);
         return true;
     }
 
-    private async Task<decimal> GetSavedAmountAsync(
-        Guid goalId,
+    // Returns null when the goal is not visible to the user and throws
+    // when it is visible but the user may not change it.
+    private async Task<SavingsGoal?> FindEditableAsync(
+        Guid id,
         Guid userId,
         CancellationToken ct)
     {
-        return await _db.SavingsGoalContributions
-            .Where(x => x.SavingsGoalId == goalId && x.UserId == userId)
-            .SumAsync(x => (decimal?)x.Amount, ct)
-            ?? 0;
+        var goal = await FindAccessibleAsync(id, userId, ct, tracking: true);
+
+        if (goal is not null && !await CanEditAsync(goal, userId, ct))
+        {
+            throw new UnauthorizedAccessException(
+                "Your household role does not allow shared savings goal changes.");
+        }
+
+        return goal;
+    }
+
+    private async Task<SavingsGoal?> FindAccessibleAsync(
+        Guid id,
+        Guid userId,
+        CancellationToken ct,
+        bool tracking = false)
+    {
+        var householdIds = await _householdAuthorization
+            .GetHouseholdIdsAsync(userId, ct);
+
+        var query = tracking
+            ? _db.SavingsGoals
+            : _db.SavingsGoals.AsNoTracking();
+
+        return await query.SingleOrDefaultAsync(
+            x => x.Id == id &&
+                 (x.UserId == userId ||
+                  (x.HouseholdId.HasValue &&
+                   householdIds.Contains(x.HouseholdId.Value))),
+            ct);
+    }
+
+    private async Task<bool> CanEditAsync(
+        SavingsGoal goal,
+        Guid userId,
+        CancellationToken ct)
+    {
+        return goal.HouseholdId is { } householdId
+            ? await _householdAuthorization.CanEditAsync(userId, householdId, ct)
+            : goal.UserId == userId;
+    }
+
+    private async Task<SavingsGoalProgress> ReadProgressAsync(
+        SavingsGoal goal,
+        CancellationToken ct)
+    {
+        var progress = await _progress.ReadAsync([goal], DateTime.UtcNow, ct);
+        return progress[goal.Id];
+    }
+
+    // Sets how progress is tracked: a linked account balance, or
+    // manual contributions with an optional schedule. Not both, since
+    // scheduled contributions would double count account deposits.
+    private async Task ApplyTrackingAsync(
+        SavingsGoal goal,
+        Guid? linkedAccountId,
+        decimal? autoAmount,
+        RecurrenceFrequency? autoFrequency,
+        DateTime? autoStartUtc,
+        CancellationToken ct)
+    {
+        var hasSchedule = autoAmount is not null || autoFrequency is not null;
+
+        if (linkedAccountId is { } accountId)
+        {
+            if (hasSchedule)
+            {
+                throw new ArgumentException(
+                    "Scheduled contributions are not available for goals that track a linked account.");
+            }
+
+            await ValidateLinkedAccountAsync(goal, accountId, ct);
+        }
+
+        goal.LinkedAccountId = linkedAccountId;
+
+        if (!hasSchedule)
+        {
+            goal.AutoContributionAmount = null;
+            goal.AutoContributionFrequency = null;
+            goal.AutoContributionStartUtc = null;
+            goal.NextAutoContributionUtc = null;
+            return;
+        }
+
+        if (autoAmount is not { } amount || autoFrequency is not { } frequency)
+        {
+            throw new ArgumentException(
+                "Scheduled contributions need both an amount and a frequency.");
+        }
+
+        ValidateAmount(amount, "Scheduled contribution");
+
+        if (!Enum.IsDefined(frequency))
+            throw new ArgumentException("Invalid contribution frequency.");
+
+        var now = DateTime.UtcNow;
+        var start = autoStartUtc ?? now;
+
+        if (start.Kind != DateTimeKind.Utc)
+            throw new ArgumentException("Scheduled contribution start date must be UTC.");
+
+        var unchanged =
+            goal.AutoContributionAmount == amount &&
+            goal.AutoContributionFrequency == frequency &&
+            goal.AutoContributionStartUtc == start &&
+            goal.NextAutoContributionUtc is not null;
+
+        goal.AutoContributionAmount = amount;
+        goal.AutoContributionFrequency = frequency;
+        goal.AutoContributionStartUtc = start;
+
+        if (unchanged)
+            return;
+
+        // A start date of today or later posts on that date. An earlier
+        // date only anchors the schedule; missed dates are not back-filled.
+        goal.NextAutoContributionUtc = start.Date >= now.Date
+            ? start
+            : RecurrenceCalculator.GetNextOccurrence(
+                start,
+                frequency,
+                now,
+                await _progress.GetTimeZoneIdAsync(goal.UserId, ct));
+    }
+
+    private async Task ValidateLinkedAccountAsync(
+        SavingsGoal goal,
+        Guid accountId,
+        CancellationToken ct)
+    {
+        var account = await _db.FinancialAccounts
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == accountId, ct);
+
+        var inScope = account is not null &&
+            (goal.HouseholdId is { } householdId
+                ? account.HouseholdId == householdId
+                : account.UserId == goal.UserId);
+
+        if (!inScope)
+        {
+            throw new ArgumentException(goal.HouseholdId is null
+                ? "Choose one of your own accounts to link."
+                : "Choose an account shared with this household to link.");
+        }
+
+        if (account!.Currency != goal.Currency)
+            throw new ArgumentException("The linked account must use the goal's currency.");
+
+        if (await _db.SavingsGoals.AnyAsync(
+                x => x.LinkedAccountId == accountId && x.Id != goal.Id,
+                ct))
+        {
+            throw new ArgumentException(
+                "That account is already linked to another savings goal.");
+        }
     }
 
     private async Task EnsureUserHasCurrencyAccountAsync(
@@ -259,6 +480,30 @@ public sealed class SavingsGoalService : ISavingsGoalService
         }
     }
 
+    private static void ValidateGoalType(
+        SavingsGoalType goalType,
+        int? emergencyFundMonths)
+    {
+        switch (goalType)
+        {
+            case SavingsGoalType.Custom when emergencyFundMonths is not null:
+                throw new ArgumentException(
+                    "Months of expenses only apply to emergency fund goals.");
+
+            case SavingsGoalType.EmergencyFund
+                when emergencyFundMonths is not (>= 1 and <= MaximumEmergencyFundMonths):
+                throw new ArgumentException(
+                    $"Emergency funds must cover between 1 and {MaximumEmergencyFundMonths} months of expenses.");
+
+            case SavingsGoalType.Custom:
+            case SavingsGoalType.EmergencyFund:
+                return;
+
+            default:
+                throw new ArgumentException("Invalid savings goal type.");
+        }
+    }
+
     private static string NormalizeCurrency(string currency)
     {
         var normalized = currency?.Trim().ToUpperInvariant();
@@ -271,35 +516,50 @@ public sealed class SavingsGoalService : ISavingsGoalService
 
     private static SavingsGoalResponse ToResponse(
         SavingsGoal goal,
-        decimal amountSaved)
+        SavingsGoalProgress progress,
+        bool canEdit)
     {
+        var target = progress.TargetAmount;
+        var saved = progress.AmountSaved;
+        var projection = SavingsGoalProjectionCalculator.Project(
+            target,
+            saved,
+            progress.MonthlyPace,
+            goal.TargetDateUtc,
+            DateTime.UtcNow);
+
         return new SavingsGoalResponse(
             goal.Id,
             goal.Name,
             goal.Currency,
-            goal.TargetAmount,
-            amountSaved,
-            Math.Max(0, goal.TargetAmount - amountSaved),
-            Math.Min(
-                100,
+            target,
+            saved,
+            Math.Max(0, target - saved),
+            Math.Clamp(
                 Math.Round(
-                    amountSaved / goal.TargetAmount * 100,
+                    saved / target * 100,
                     2,
-                    MidpointRounding.AwayFromZero)),
+                    MidpointRounding.AwayFromZero),
+                0,
+                100),
             goal.TargetDateUtc,
             goal.CreatedAtUtc,
-            goal.UpdatedAtUtc);
-    }
-
-    private static SavingsGoalContributionResponse ToContributionResponse(
-        SavingsGoalContribution contribution)
-    {
-        return new SavingsGoalContributionResponse(
-            contribution.Id,
-            contribution.SavingsGoalId,
-            contribution.Amount,
-            contribution.ContributionDateUtc,
-            contribution.Note,
-            contribution.CreatedAtUtc);
+            goal.UpdatedAtUtc,
+            goal.HouseholdId,
+            canEdit,
+            goal.GoalType,
+            goal.EmergencyFundMonths,
+            progress.AverageMonthlyExpenses,
+            goal.LinkedAccountId,
+            progress.LinkedAccountName,
+            goal.AutoContributionAmount,
+            goal.AutoContributionFrequency,
+            goal.AutoContributionStartUtc,
+            goal.NextAutoContributionUtc,
+            goal.NotificationsEnabled,
+            projection.Status,
+            progress.MonthlyPace,
+            projection.MonthlyContributionNeeded,
+            projection.ProjectedCompletionDateUtc);
     }
 }

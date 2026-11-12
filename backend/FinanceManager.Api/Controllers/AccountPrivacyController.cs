@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using FinanceManager.Api.Filters;
+using FinanceManager.Application.Interfaces;
 using FinanceManager.Infrastructure.Identity;
 using FinanceManager.Infrastructure.Persistence;
 
@@ -20,15 +21,24 @@ public sealed class AccountPrivacyController : ControllerBase
     private readonly FinanceDbContext _db;
     private readonly UserManager<ApplicationUser> _users;
     private readonly SignInManager<ApplicationUser> _signInManager;
+    private readonly IBillingService _billing;
+    private readonly IBankConnectionService _bankConnections;
+    private readonly ILogger<AccountPrivacyController> _logger;
 
     public AccountPrivacyController(
         FinanceDbContext db,
         UserManager<ApplicationUser> users,
-        SignInManager<ApplicationUser> signInManager)
+        SignInManager<ApplicationUser> signInManager,
+        IBillingService billing,
+        IBankConnectionService bankConnections,
+        ILogger<AccountPrivacyController> logger)
     {
         _db = db;
         _users = users;
         _signInManager = signInManager;
+        _billing = billing;
+        _bankConnections = bankConnections;
+        _logger = logger;
     }
 
     [HttpGet("export")]
@@ -230,6 +240,25 @@ public sealed class AccountPrivacyController : ControllerBase
 
         if (!await _users.CheckPasswordAsync(user, request.CurrentPassword))
             return BadRequest(new { message = "The current password is incorrect." });
+
+        // Stop external billing before deleting anything: a deleted
+        // account must never keep being charged.
+        try
+        {
+            await _billing.CancelSubscriptionAsync(user.Id, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "Subscription cancellation failed for user {UserId}.", user.Id);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                message = "We could not cancel your subscription, so your account was not deleted. Please try again or contact support."
+            });
+        }
+
+        // Revoke bank access at Plaid so linked items stop being billed.
+        foreach (var connection in await _bankConnections.GetUserConnectionsAsync(user.Id))
+            await _bankConnections.DisconnectAsync(connection.Id, user.Id);
 
         await using var transaction =
             await _db.Database.BeginTransactionAsync(ct);

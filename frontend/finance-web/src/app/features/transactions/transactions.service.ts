@@ -29,6 +29,18 @@ export interface SaveTransactionRequest {
   transactionDateUtc: string;
 }
 
+export interface CsvImportError {
+  row: number;
+  message: string;
+}
+
+export interface CsvImportResult {
+  imported: number;
+  duplicates: number;
+  invalidRows: number;
+  errors: CsvImportError[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -72,6 +84,16 @@ export class TransactionsService {
   delete(id: string): Observable<void> {
     return this.http.delete<void>(
       `${this.transactionsUrl}/${id}`
+    );
+  }
+
+  importCsv(file: File): Observable<CsvImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return this.http.post<CsvImportResult>(
+      `${this.transactionsUrl}/import/csv`,
+      formData
     );
   }
 }

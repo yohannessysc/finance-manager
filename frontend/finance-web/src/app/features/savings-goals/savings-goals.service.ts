@@ -2,6 +2,20 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+import { RecurrenceFrequency } from '../recurring/recurring.service';
+
+export enum SavingsGoalType {
+  Custom = 1,
+  EmergencyFund = 2
+}
+
+export enum SavingsGoalStatus {
+  NoTargetDate = 1,
+  OnTrack = 2,
+  Behind = 3,
+  Completed = 4
+}
+
 export interface SavingsGoal {
   id: string;
   name: string;
@@ -13,6 +27,22 @@ export interface SavingsGoal {
   targetDateUtc: string | null;
   createdAtUtc: string;
   updatedAtUtc: string;
+  householdId: string | null;
+  canEdit: boolean;
+  goalType: SavingsGoalType;
+  emergencyFundMonths: number | null;
+  averageMonthlyExpenses: number | null;
+  linkedAccountId: string | null;
+  linkedAccountName: string | null;
+  autoContributionAmount: number | null;
+  autoContributionFrequency: RecurrenceFrequency | null;
+  autoContributionStartUtc: string | null;
+  nextAutoContributionUtc: string | null;
+  notificationsEnabled: boolean;
+  status: SavingsGoalStatus;
+  monthlyPace: number;
+  monthlyContributionNeeded: number | null;
+  projectedCompletionDateUtc: string | null;
 }
 
 export interface SavingsGoalContribution {
@@ -22,19 +52,32 @@ export interface SavingsGoalContribution {
   contributionDateUtc: string;
   note: string | null;
   createdAtUtc: string;
+  contributorUserId: string;
+  contributorEmail: string | null;
+  isScheduled: boolean;
 }
 
-export interface SavingsGoalUpsertRequest {
+// Settings shared by create and update. Update is a full replacement,
+// so omitted (null) settings are cleared on the server.
+export interface SavingsGoalSettings {
+  emergencyFundMonths: number | null;
+  linkedAccountId: string | null;
+  autoContributionAmount: number | null;
+  autoContributionFrequency: RecurrenceFrequency | null;
+  autoContributionStartUtc: string | null;
+  notificationsEnabled: boolean;
+}
+
+export interface SavingsGoalUpdateRequest extends SavingsGoalSettings {
   name: string;
+  targetAmount: number;
+  targetDateUtc: string | null;
+}
+
+export interface SavingsGoalUpsertRequest extends SavingsGoalUpdateRequest {
   currency: string;
-  targetAmount: number;
-  targetDateUtc: string | null;
-}
-
-export interface SavingsGoalUpdateRequest {
-  name: string;
-  targetAmount: number;
-  targetDateUtc: string | null;
+  householdId: string | null;
+  goalType: SavingsGoalType;
 }
 
 export interface SavingsGoalContributionRequest {

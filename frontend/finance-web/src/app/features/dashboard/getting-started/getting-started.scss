@@ -1,0 +1,135 @@
+:host {
+  display: block;
+}
+
+.getting-started {
+  margin-bottom: 22px;
+  padding: 22px;
+  border: 1px solid var(--fm-border);
+  border-radius: 18px;
+  background: var(--fm-surface);
+  box-shadow: var(--fm-shadow);
+}
+
+header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+
+  h2 {
+    margin: 6px 0 4px;
+    font-size: 18px;
+  }
+
+  p {
+    margin: 0;
+    color: var(--fm-muted);
+    font-size: 12px;
+  }
+}
+
+.eyebrow {
+  color: var(--fm-primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.dismiss {
+  padding: 6px 10px;
+  border: 1px solid var(--fm-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fm-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.progress {
+  height: 6px;
+  margin: 16px 0;
+  border-radius: 999px;
+  background: var(--fm-border);
+  overflow: hidden;
+
+  div {
+    height: 100%;
+    background: var(--fm-primary);
+    transition: width .3s ease;
+  }
+}
+
+ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--fm-background);
+
+  strong {
+    font-size: 13px;
+  }
+
+  p {
+    margin: 2px 0 0;
+    color: var(--fm-muted);
+    font-size: 12px;
+  }
+
+  a {
+    color: var(--fm-primary);
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  &.done strong {
+    color: var(--fm-muted);
+    text-decoration: line-through;
+  }
+}
+
+.check {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--fm-border);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+
+  .done & {
+    border-color: var(--fm-primary);
+    background: var(--fm-primary);
+  }
+}
+
+.optional {
+  color: var(--fm-muted);
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  li {
+    grid-template-columns: 24px 1fr;
+
+    a {
+      grid-column: 2;
+    }
+  }
+}

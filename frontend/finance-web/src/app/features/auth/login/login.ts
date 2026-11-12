@@ -31,6 +31,14 @@ export class Login {
   readonly error = signal('');
   readonly needsVerification = signal(false);
 
+  // Set after the password step when the account uses two-factor auth.
+  readonly twoFactorStep = signal(false);
+  readonly useRecoveryCode = signal(false);
+
+  readonly codeForm = this.fb.nonNullable.group({
+    code: ['', [Validators.required, Validators.maxLength(20)]]
+  });
+
   readonly form = this.fb.nonNullable.group({
     email: ['', [
       Validators.required,
@@ -38,6 +46,69 @@ export class Login {
     ]],
     password: ['', Validators.required]
   });
+
+  submitCode(): void {
+    if (this.submitting()) {
+      return;
+    }
+
+    if (this.codeForm.invalid) {
+      this.codeForm.markAllAsTouched();
+      return;
+    }
+
+    this.submitting.set(true);
+    this.error.set('');
+
+    this.authService.loginTwoFactor(
+      this.codeForm.getRawValue().code.trim(),
+      this.useRecoveryCode()
+    )
+      .pipe(finalize(() => this.submitting.set(false)))
+      .subscribe({
+        next: () => this.navigateAfterSignIn(),
+        error: err => {
+          const code = err.error?.code;
+
+          if (code === 'TWO_FACTOR_EXPIRED') {
+            this.backToPassword();
+            this.error.set('Your sign-in timed out. Please enter your password again.');
+            return;
+          }
+
+          this.error.set(
+            code === 'ACCOUNT_LOCKED'
+              ? 'Too many unsuccessful attempts. Please try again later.'
+              : this.useRecoveryCode()
+                ? 'That recovery code is not valid or was already used.'
+                : 'That code is not valid. Check your authenticator app and try again.'
+          );
+        }
+      });
+  }
+
+  toggleRecoveryCode(): void {
+    this.useRecoveryCode.update(value => !value);
+    this.codeForm.reset();
+    this.error.set('');
+  }
+
+  backToPassword(): void {
+    this.twoFactorStep.set(false);
+    this.useRecoveryCode.set(false);
+    this.codeForm.reset();
+    this.form.controls.password.reset();
+    this.error.set('');
+  }
+
+  private navigateAfterSignIn(): void {
+    // Only allow in-app paths to avoid open redirects
+    const returnUrl = this.router.parseUrl(this.router.url).queryParams['returnUrl'];
+    const target = typeof returnUrl === 'string' && returnUrl.startsWith('/') && !returnUrl.startsWith('//')
+      ? returnUrl
+      : '/dashboard';
+    this.router.navigateByUrl(target);
+  }
 
   togglePassword(): void {
     this.showPassword.update(value => !value);
@@ -65,16 +136,16 @@ export class Login {
         finalize(() => this.submitting.set(false))
       )
       .subscribe({
-        next: () => {
+        next: outcome => {
           this.error.set('');
           this.needsVerification.set(false);
 
-          // Only allow in-app paths to avoid open redirects
-          const returnUrl = this.router.parseUrl(this.router.url).queryParams['returnUrl'];
-          const target = typeof returnUrl === 'string' && returnUrl.startsWith('/') && !returnUrl.startsWith('//')
-            ? returnUrl
-            : '/dashboard';
-          this.router.navigateByUrl(target);
+          if (outcome.status === 'twoFactorRequired') {
+            this.twoFactorStep.set(true);
+            return;
+          }
+
+          this.navigateAfterSignIn();
         },
 
         error: err => {

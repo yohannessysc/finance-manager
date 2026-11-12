@@ -68,7 +68,7 @@ public class BankConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create Plaid Link token for user {UserId}", parsedUserId);
-            return BadRequest(new { error = "Failed to create link token", details = ex.Message });
+            return BadRequest(new { error = "Could not start bank linking. Please try again." });
         }
     }
 
@@ -125,7 +125,7 @@ public class BankConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to exchange Plaid token for user {UserId}", parsedUserId);
-            return BadRequest(new { error = "Failed to exchange token", details = ex.Message });
+            return BadRequest(new { error = "Could not finish connecting your bank. Please try again." });
         }
     }
 
@@ -321,7 +321,7 @@ public class BankConnectionsController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to sync connection {ConnectionId} for user {UserId}", connectionId, parsedUserId);
-            return BadRequest(new { error = "Failed to sync connection", details = ex.Message });
+            return BadRequest(new { error = "Sync failed. Please try again later." });
         }
     }
 

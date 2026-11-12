@@ -5,6 +5,7 @@ import { Login } from './features/auth/login/login';
 
 import { AppShell } from './layout/app-shell/app-shell';
 import { authGuard } from './core/auth/auth.guard';
+import { guestGuard } from './core/auth/guest.guard';
 
 export const routes: Routes = [
   { path: 'login', component: Login },
@@ -14,6 +15,22 @@ export const routes: Routes = [
   { path: 'confirm-email-change', loadComponent: () => import('./features/auth/confirm-email-change/confirm-email-change').then(m => m.ConfirmEmailChange) },
   { path: 'forgot-password', loadComponent: () => import('./features/auth/forgot-password/forgot-password').then(m => m.ForgotPassword) },
   { path: 'reset-password', loadComponent: () => import('./features/auth/reset-password/reset-password').then(m => m.ResetPassword) },
+
+  // Public site. The router falls through to the app shell for any path
+  // these children don't match.
+  {
+    path: '',
+    loadComponent: () => import('./layout/public-shell/public-shell').then(m => m.PublicShell),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        canActivate: [guestGuard],
+        loadComponent: () => import('./features/public/landing/landing').then(m => m.Landing)
+      },
+      { path: 'pricing', loadComponent: () => import('./features/public/pricing/pricing').then(m => m.Pricing) }
+    ]
+  },
 
   {
     path: '',

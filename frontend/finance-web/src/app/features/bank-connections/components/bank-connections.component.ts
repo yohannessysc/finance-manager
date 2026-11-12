@@ -11,273 +11,231 @@ import { BillingService, SubscriptionPlan } from '../../../core/billing/billing.
   standalone: true,
   imports: [CommonModule, PlaidLinkComponent, RouterLink],
   template: `
-    <div class="bank-connections-container">
-      <h1>🏦 Bank Connections</h1>
-      <p class="description">Connect your bank accounts to automatically import transactions</p>
+    <section class="bank-page">
+      <header class="page-heading">
+        <span class="eyebrow">AUTOMATIC IMPORTS</span>
+        <h1>Bank connections</h1>
+        <p>Connect your bank to import accounts and transactions automatically.</p>
+      </header>
 
       <!-- Linking needs the Bank plan; existing connections stay visible -->
       <app-plaid-link *ngIf="canLink() === true" (connected)="loadConnections()"></app-plaid-link>
       <div *ngIf="canLink() === false" class="upgrade-banner">
         <p>Automatic bank connections and syncing are part of the <strong>Bank</strong> plan.
           Connections you already have stay visible but stop syncing.</p>
-        <a routerLink="/billing" class="btn btn-sync">See plans</a>
+        <a routerLink="/billing" class="primary-button">See plans</a>
       </div>
 
-      <!-- Connections List -->
-      <div class="connections-section">
-        <h2>Connected Banks</h2>
-        
-        <div *ngIf="isLoading()" class="loading">
-          Loading connections...
-        </div>
+      <h2>Connected banks</h2>
 
-        <div *ngIf="connections().length === 0 && !isLoading()" class="empty-state">
-          <p>📭 No connected banks yet. Use the form above to connect your first bank account.</p>
-        </div>
+      <p *ngIf="isLoading()" class="state-message">Loading connections...</p>
 
-        <div class="connections-grid">
-          <div *ngFor="let connection of connections()" class="connection-card">
-            <div class="card-header">
-              <h3>{{ connection.institutionName }}</h3>
-              <span [ngClass]="'status-badge status-' + connection.status.toLowerCase()">
-                {{ connection.status }}
-              </span>
-            </div>
+      <p *ngIf="connections().length === 0 && !isLoading()" class="state-message">
+        No banks connected yet.
+      </p>
 
-            <div class="card-body">
-              <p><strong>Provider:</strong> {{ connection.bankProvider }}</p>
-              <p><strong>Status:</strong> {{ connection.status }}</p>
-              <p><strong>Connected:</strong> {{ connection.connectedAtUtc | date: 'short' }}</p>
-              <p *ngIf="connection.lastSyncAtUtc">
-                <strong>Last Sync:</strong> {{ connection.lastSyncAtUtc | date: 'short' }}
-              </p>
-              <p><strong>Transactions:</strong> {{ connection.transactionCount }}</p>
-              <p *ngIf="connection.expiresAtUtc">
-                <strong>Expires:</strong> {{ connection.expiresAtUtc | date: 'short' }}
-              </p>
-              <p *ngIf="connection.errorMessage" class="error-text">
-                <strong>Error:</strong> {{ connection.errorMessage }}
-              </p>
-            </div>
+      <div class="connections-grid">
+        <article *ngFor="let connection of connections()" class="connection-card">
+          <header>
+            <h3>{{ connection.institutionName }}</h3>
+            <span class="status-badge" [ngClass]="'status-' + connection.status.toLowerCase()">
+              {{ statusLabel(connection.status) }}
+            </span>
+          </header>
 
-            <div class="card-actions">
-              <button
-                *ngIf="connection.status === 'ExpiredLink'"
-                (click)="reconnect(connection)"
-                [disabled]="syncing()[connection.id] || canLink() === false"
-                class="btn btn-sync">
-                🔑 Reconnect
-              </button>
-              <button 
-                *ngIf="connection.status !== 'ExpiredLink'"
-                (click)="syncConnection(connection.id)"
-                [disabled]="syncing()[connection.id] || canLink() === false"
-                class="btn btn-sync">
-                {{ syncing()[connection.id] ? '⏳ Syncing...' : '🔄 Sync Now' }}
-              </button>
-              <button 
-                (click)="disconnectConnection(connection.id)"
-                class="btn btn-disconnect">
-                🔌 Disconnect
-              </button>
-            </div>
+          <dl>
+            <div><dt>Connected</dt><dd>{{ connection.connectedAtUtc | date: 'mediumDate' }}</dd></div>
+            <div><dt>Last sync</dt><dd>{{ connection.lastSyncAtUtc ? (connection.lastSyncAtUtc | date: 'short') : 'Not yet' }}</dd></div>
+            <div><dt>Transactions</dt><dd>{{ connection.transactionCount }}</dd></div>
+          </dl>
 
-            <div *ngIf="syncStatus()[connection.id]" class="sync-status">
-              <p class="sync-info">{{ syncStatus()[connection.id] }}</p>
-            </div>
-          </div>
-        </div>
+          <p *ngIf="connection.errorMessage" class="error-text">{{ connection.errorMessage }}</p>
+
+          <p *ngIf="syncStatus()[connection.id]" class="sync-status">{{ syncStatus()[connection.id] }}</p>
+
+          <footer>
+            <button
+              *ngIf="connection.status === 'ExpiredLink'"
+              type="button"
+              class="primary-button"
+              (click)="reconnect(connection)"
+              [disabled]="syncing()[connection.id] || canLink() === false">
+              Reconnect
+            </button>
+            <button
+              *ngIf="connection.status !== 'ExpiredLink'"
+              type="button"
+              class="outline-button"
+              (click)="syncConnection(connection.id)"
+              [disabled]="syncing()[connection.id] || canLink() === false">
+              {{ syncing()[connection.id] ? 'Syncing...' : 'Sync now' }}
+            </button>
+            <button type="button" class="text-button danger" (click)="disconnectConnection(connection.id)">
+              Disconnect
+            </button>
+          </footer>
+        </article>
       </div>
-    </div>
+    </section>
   `,
   styles: [`
-    .bank-connections-container {
-      padding: 2rem;
-      max-width: 1200px;
+    :host {
+      display: block;
+      color: var(--fm-text);
+    }
+    .bank-page {
+      max-width: 1100px;
       margin: 0 auto;
     }
-
-    h1 {
-      font-size: 2rem;
-      color: #333;
-      margin-bottom: 0.5rem;
+    .page-heading {
+      margin-bottom: 20px;
     }
-
-    .description {
-      color: #666;
-      margin-bottom: 2rem;
-      font-size: 1.1rem;
+    .page-heading h1 {
+      margin: 8px 0;
+      font-size: 32px;
     }
-
-    .connections-section {
-      margin-top: 3rem;
-    }
-
-    h2 {
-      font-size: 1.5rem;
-      color: #333;
-      margin-bottom: 1.5rem;
-      border-bottom: 2px solid #667eea;
-      padding-bottom: 0.5rem;
-    }
-
-    .loading {
-      text-align: center;
-      padding: 2rem;
-      color: #666;
-      font-size: 1.1rem;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 2rem;
-      background: #f5f5f5;
-      border-radius: 8px;
-      color: #666;
-    }
-
-    .connections-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-      gap: 1.5rem;
-    }
-
-    .connection-card {
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      overflow: hidden;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-
-    .connection-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    .card-header {
-      padding: 1rem;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .card-header h3 {
+    .page-heading p,
+    .state-message {
       margin: 0;
-      font-size: 1.2rem;
+      color: var(--fm-muted);
     }
-
+    .eyebrow {
+      color: var(--fm-primary);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+    }
+    h2 {
+      margin: 28px 0 14px;
+      font-size: 18px;
+    }
     .upgrade-banner {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 1rem;
-      margin: 1rem 0;
-      padding: 1rem 1.25rem;
-      border: 1px solid var(--fm-border, #e0e0e0);
-      border-radius: 8px;
+      gap: 14px;
+      padding: 18px 20px;
+      border: 1px solid var(--fm-border);
+      border-radius: 14px;
+      background: var(--fm-surface);
     }
     .upgrade-banner p {
       margin: 0;
+      max-width: 620px;
     }
-    .upgrade-banner a {
-      text-decoration: none;
+    .connections-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
     }
-    .status-expiredlink {
-      background-color: #fff4e5;
-      color: #b54708;
+    .connection-card {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 20px;
+      border: 1px solid var(--fm-border);
+      border-radius: 16px;
+      background: var(--fm-surface);
+      box-shadow: var(--fm-shadow);
+    }
+    .connection-card header,
+    .connection-card footer {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .connection-card footer {
+      justify-content: flex-start;
+      margin-top: auto;
+    }
+    .connection-card h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+    dl {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+    }
+    dl div {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+    }
+    dt {
+      color: var(--fm-muted);
+    }
+    dd {
+      margin: 0;
+      font-weight: 700;
     }
     .status-badge {
-      padding: 0.25rem 0.75rem;
-      border-radius: 20px;
-      font-size: 0.85rem;
-      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: var(--fm-hover);
+      color: var(--fm-muted);
+      font-size: 11px;
+      font-weight: 800;
     }
-
     .status-connected {
-      background: rgba(255, 255, 255, 0.3);
+      background: var(--fm-primary-soft);
+      color: var(--fm-primary);
     }
-
-    .status-pending {
-      background: rgba(255, 255, 100, 0.3);
-    }
-
-    .status-disconnected,
+    .status-expiredlink,
     .status-failed {
-      background: rgba(255, 100, 100, 0.3);
+      background: rgba(180, 35, 24, 0.12);
+      color: #b42318;
     }
-
-    .card-body {
-      padding: 1rem;
-      background: white;
-    }
-
-    .card-body p {
-      margin: 0.5rem 0;
-      font-size: 0.95rem;
-      color: #333;
-    }
-
     .error-text {
-      color: #c33;
-      font-weight: 600;
-    }
-
-    .card-actions {
-      padding: 1rem;
-      background: #f9f9f9;
-      border-top: 1px solid #e0e0e0;
-      display: flex;
-      gap: 0.5rem;
-    }
-
-    .btn {
-      flex: 1;
-      padding: 0.75rem;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .btn-sync {
-      background: #667eea;
-      color: white;
-    }
-
-    .btn-sync:hover:not(:disabled) {
-      background: #5568d3;
-    }
-
-    .btn-sync:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .btn-disconnect {
-      background: #f0f0f0;
-      color: #333;
-    }
-
-    .btn-disconnect:hover {
-      background: #e0e0e0;
-    }
-
-    .sync-status {
-      padding: 0.75rem 1rem;
-      background: #efe;
-      border-top: 1px solid #cfc;
-      font-size: 0.9rem;
-      color: #3c3;
-    }
-
-    .sync-info {
       margin: 0;
+      color: #b42318;
+      font-size: 12px;
+    }
+    .sync-status {
+      margin: 0;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--fm-background);
+      color: var(--fm-muted);
+      font-size: 12px;
+    }
+    .primary-button,
+    .outline-button,
+    .text-button {
+      min-height: 38px;
+      padding: 9px 14px;
+      border-radius: 10px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 800;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .primary-button {
+      border: 0;
+      background: var(--fm-primary);
+      color: #fff;
+    }
+    .outline-button {
+      border: 1px solid var(--fm-border);
+      background: transparent;
+      color: var(--fm-text);
+    }
+    .text-button {
+      border: 0;
+      background: transparent;
+      color: var(--fm-primary);
+    }
+    .text-button.danger {
+      color: #b42318;
+    }
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
     }
   `]
 })
@@ -308,6 +266,16 @@ export class BankConnectionsComponent implements OnInit, OnDestroy {
     this.reconnectHandler?.destroy?.();
   }
 
+  statusLabel(status: string): string {
+    switch (status) {
+      case 'Connected': return 'Connected';
+      case 'ExpiredLink': return 'Needs reconnect';
+      case 'Disconnected': return 'Disconnected';
+      case 'Failed': return 'Sync failed';
+      default: return status;
+    }
+  }
+
   /**
    * Re-authenticate a connection whose bank login expired (Plaid update mode)
    */
@@ -327,10 +295,10 @@ export class BankConnectionsComponent implements OnInit, OnDestroy {
         onSuccess: async () => {
           try {
             const sync = await firstValueFrom(this.bankConnectionService.markReconnected(connection.id));
-            this.setSyncStatus(connection.id, `✅ Reconnected: ${sync.transactionsImported} new transactions imported`);
+            this.setSyncStatus(connection.id, `Reconnected: ${sync.transactionsImported} new transactions imported`);
             this.loadConnections();
           } catch {
-            this.setSyncStatus(connection.id, '❌ Reconnected at the bank, but the update failed. Try Sync Now.');
+            this.setSyncStatus(connection.id, 'Reconnected at the bank, but the update failed. Try Sync now.');
           } finally {
             this.setSyncing(connection.id, false);
           }
@@ -338,14 +306,14 @@ export class BankConnectionsComponent implements OnInit, OnDestroy {
         onExit: (err: any) => {
           this.setSyncing(connection.id, false);
           if (err) {
-            this.setSyncStatus(connection.id, `❌ Reconnect failed: ${err.display_message || err.error_message}`);
+            this.setSyncStatus(connection.id, `Reconnect failed: ${err.display_message || err.error_message}`);
           }
         }
       });
       this.reconnectHandler.open();
     } catch (err: any) {
       this.setSyncing(connection.id, false);
-      this.setSyncStatus(connection.id, `❌ ${err?.error?.message || err?.error?.error || 'Could not start reconnecting.'}`);
+      this.setSyncStatus(connection.id, `${err?.error?.message || err?.error?.error || 'Could not start reconnecting.'}`);
     }
   }
 
@@ -385,7 +353,7 @@ export class BankConnectionsComponent implements OnInit, OnDestroy {
     this.bankConnectionService.syncConnection(connectionId).subscribe({
       next: (response: BankSyncResponse) => {
         const status = this.syncStatus();
-        status[connectionId] = `✅ Sync complete: ${response.transactionsImported} imported, ${response.duplicatesSkipped} duplicates skipped`;
+        status[connectionId] = `Sync complete: ${response.transactionsImported} imported, ${response.duplicatesSkipped} duplicates skipped`;
         this.syncStatus.set(status);
 
         const syncingState = this.syncing();
@@ -398,7 +366,7 @@ export class BankConnectionsComponent implements OnInit, OnDestroy {
       error: (err) => {
         console.error('Error syncing connection:', err);
         const status = this.syncStatus();
-        status[connectionId] = `❌ Sync failed: ${err.error?.error || 'Unknown error'}`;
+        status[connectionId] = `Sync failed: ${err.error?.error || 'Unknown error'}`;
         this.syncStatus.set(status);
 
         const syncingState = this.syncing();

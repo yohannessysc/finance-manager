@@ -44,10 +44,12 @@ import {
   UserSession
 } from '../../core/services/sessions.service';
 
+import { TwoFactorSettings } from './two-factor/two-factor-settings';
+
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, DatePipe],
+  imports: [ReactiveFormsModule, RouterLink, DatePipe, TwoFactorSettings],
   templateUrl: './settings.html',
   styleUrl: './settings.scss'
 })

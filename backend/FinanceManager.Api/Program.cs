@@ -16,12 +16,62 @@ using FinanceManager.Infrastructure.Security;
 using FinanceManager.Infrastructure.Services;
 
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ---------------------------------------
+// 0. Logging and error tracking
+// ---------------------------------------
+// Production logs are single-line JSON so a log platform can index them.
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Logging.ClearProviders();
+    builder.Logging.AddJsonConsole(options =>
+    {
+        options.IncludeScopes = true;
+        options.UseUtcTimestamp = true;
+        options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+    });
+}
+
+// Sentry stays disabled until Sentry:Dsn is set. Personal data is never
+// sent: this is a finance app, so no request bodies, cookies or user IPs.
+builder.WebHost.UseSentry(options =>
+{
+    options.Dsn = builder.Configuration["Sentry:Dsn"] ?? "";
+    options.Environment = builder.Environment.EnvironmentName;
+    options.SendDefaultPii = false;
+    options.MaxRequestBodySize = Sentry.Extensibility.RequestSize.None;
+    options.TracesSampleRate =
+        builder.Configuration.GetValue<double?>("Sentry:TracesSampleRate") ?? 0;
+});
+
+builder.Services.AddProblemDetails();
+
+// Behind the reverse proxy the client IP and scheme arrive in
+// X-Forwarded-* headers. Without this, every user shares the proxy's IP
+// for login rate limiting. The API must only be reachable through the
+// proxy, otherwise clients could spoof these headers.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit =
+        builder.Configuration.GetValue<int?>("ForwardedHeaders:ForwardLimit") ?? 1;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+builder.Services
+    .AddHealthChecks()
+    .AddDbContextCheck<FinanceDbContext>("database", tags: ["ready"]);
 
 // ---------------------------------------
 // 1. Controllers and API documentation
@@ -140,27 +190,10 @@ builder.Services.ConfigureApplicationCookie(options =>
 
     options.Events.OnValidatePrincipal = async context =>
     {
-        var logger = context.HttpContext.RequestServices
-            .GetRequiredService<ILogger<Program>>();
-
-        var path = context.HttpContext.Request.Path;
-        logger.LogInformation(
-            "OnValidatePrincipal START: path={path}, method={method}",
-            path,
-            context.HttpContext.Request.Method);
-
         await validateSecurityStamp(context);
 
         if (context.Principal is null)
-        {
-            logger.LogWarning(
-                "OnValidatePrincipal: Principal is null after security-stamp validation");
             return;
-        }
-
-        logger.LogInformation(
-            "OnValidatePrincipal: Principal has {claimCount} claims",
-            context.Principal.Claims.Count());
 
         var sessionClaim = context.Principal
             .FindFirst(UserSessionService.SessionClaimType)?.Value;
@@ -169,48 +202,22 @@ builder.Services.ConfigureApplicationCookie(options =>
             .FindFirst(System.Security.Claims.ClaimTypes
                 .NameIdentifier)?.Value;
 
-        logger.LogInformation(
-            "OnValidatePrincipal: sessionClaim={sessionClaim}, userClaim={userClaim}",
-            sessionClaim ?? "(null)",
-            userClaim ?? "(null)");
-
-        var valid = false;
-
-        if (Guid.TryParse(sessionClaim, out var sessionId) &&
-            Guid.TryParse(userClaim, out var userId))
-        {
-            var sessions = context.HttpContext.RequestServices
-                .GetRequiredService<UserSessionService>();
-
-            valid = await sessions.ValidateAsync(
-                sessionId,
-                userId,
-                context.HttpContext.RequestAborted);
-
-            logger.LogInformation(
-                "OnValidatePrincipal: ValidateAsync returned {valid}",
-                valid);
-        }
-        else
-        {
-            logger.LogWarning(
-                "OnValidatePrincipal: Failed to parse session/user GUIDs");
-        }
+        var valid =
+            Guid.TryParse(sessionClaim, out var sessionId) &&
+            Guid.TryParse(userClaim, out var userId) &&
+            await context.HttpContext.RequestServices
+                .GetRequiredService<UserSessionService>()
+                .ValidateAsync(
+                    sessionId,
+                    userId,
+                    context.HttpContext.RequestAborted);
 
         if (!valid)
         {
-            logger.LogWarning(
-                "OnValidatePrincipal: Session validation failed, rejecting principal");
-
             context.RejectPrincipal();
 
             await context.HttpContext.SignOutAsync(
                 IdentityConstants.ApplicationScheme);
-        }
-        else
-        {
-            logger.LogInformation(
-                "OnValidatePrincipal: Session validation PASSED");
         }
     };
 
@@ -231,6 +238,22 @@ builder.Services.ConfigureApplicationCookie(options =>
     };
 });
 
+// The short-lived cookie that carries a user between the password step
+// and the two-factor code step of sign-in.
+builder.Services.Configure<CookieAuthenticationOptions>(
+    IdentityConstants.TwoFactorUserIdScheme,
+    options =>
+    {
+        options.Cookie.Name = "FinanceManager.TwoFactor";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.SecurePolicy =
+            builder.Environment.IsDevelopment()
+                ? CookieSecurePolicy.SameAsRequest
+                : CookieSecurePolicy.Always;
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+    });
+
 // ---------------------------------------
 // 6. Security Stamp Validation
 // ---------------------------------------
@@ -245,6 +268,14 @@ builder.Services.Configure<SecurityStampValidatorOptions>(
     options =>
     {
         options.ValidationInterval = TimeSpan.Zero;
+
+        // Validation rebuilds the principal from the user record, which
+        // does not hold the per-device session id; carry it over.
+        options.OnRefreshingPrincipal = context =>
+        {
+            FinanceManager.Api.SessionClaims.CopySessionId(context.CurrentPrincipal, context.NewPrincipal);
+            return Task.CompletedTask;
+        };
     });
 
 // ---------------------------------------
@@ -435,6 +466,9 @@ builder.Services.AddHttpClient<FinanceManager.Infrastructure.Services.Plaid.IPla
     FinanceManager.Infrastructure.Services.Plaid.PlaidService>();
 
 builder.Services.AddScoped<IBankConnectionService, BankConnectionService>();
+builder.Services.AddSingleton<IBankSyncQueue, BankSyncQueue>();
+builder.Services.AddScoped<FinanceManager.Infrastructure.Services.Plaid.PlaidWebhookVerifier>();
+builder.Services.AddScoped<FinanceManager.Infrastructure.Services.Plaid.PlaidWebhookHandler>();
 builder.Services.AddScoped<IBankSyncService, BankSyncService>();
 builder.Services.AddScoped<ICategoryRuleService, CategoryRuleService>();
 
@@ -448,6 +482,8 @@ builder.Services.AddHttpClient<
 // ---------------------------------------
 // 11. Background Services
 // ---------------------------------------
+builder.Services.AddSingleton<IJobLock, PostgresJobLock>();
+
 builder.Services.AddHostedService<
     RecurringPostingBackgroundService>();
 
@@ -456,6 +492,8 @@ builder.Services.AddHostedService<
 
 builder.Services.AddHostedService<
     SavingsGoalBackgroundService>();
+
+builder.Services.AddHostedService<BankSyncQueueWorker>();
 
 // ---------------------------------------
 // 12. Authorization
@@ -467,6 +505,8 @@ builder.Services.AddAuthorization();
 // ---------------------------------------
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 await BankTokenEncryptionBackfill.RunAsync(app.Services);
 
 // ---------------------------------------
@@ -476,8 +516,29 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+else
+{
+    // Unhandled errors become a ProblemDetails JSON response carrying a
+    // traceId (to match logs and Sentry) instead of an empty 500.
+    app.UseExceptionHandler();
+    app.UseHsts();
+}
 
-app.UseHttpsRedirection();
+// No UseHttpsRedirection: TLS terminates at the reverse proxy or load
+// balancer, which owns the HTTP -> HTTPS redirect. HSTS still applies.
+
+// The API only ever returns JSON, so it can deny everything a browser
+// might otherwise do with a response.
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers.XContentTypeOptions = "nosniff";
+    headers.XFrameOptions = "DENY";
+    headers["Referrer-Policy"] = "no-referrer";
+    headers.ContentSecurityPolicy = "default-src 'none'; frame-ancestors 'none'";
+    headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+    await next();
+});
 
 app.UseRouting();
 
@@ -489,4 +550,16 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Liveness: the process is up. Readiness: it can also reach the
+// database, so a load balancer only routes traffic to working instances.
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false })
+    .AllowAnonymous();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+}).AllowAnonymous();
+
 app.Run();
+
+// Lets the integration tests host the app with WebApplicationFactory.
+public partial class Program;

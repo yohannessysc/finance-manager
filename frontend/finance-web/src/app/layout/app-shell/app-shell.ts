@@ -13,6 +13,8 @@ import {
   ThemeService
 } from '../../core/services/theme.service';
 
+import { SUPPORT_EMAIL } from '../../core/billing/plans';
+
 @Component({
   selector: 'app-shell',
   standalone: true,
@@ -25,6 +27,8 @@ import {
   styleUrl: './app-shell.scss'
 })
 export class AppShell {
+  readonly supportEmail = SUPPORT_EMAIL;
+
   readonly auth = inject(AuthService);
   readonly theme = inject(ThemeService);
 

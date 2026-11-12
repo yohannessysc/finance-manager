@@ -37,6 +37,14 @@ public sealed class BankSyncBackgroundService : BackgroundService
                 try
                 {
                     using var scope = _scopeFactory.CreateScope();
+
+                    // With several app instances only one syncs per tick.
+                    await using var lease = await scope.ServiceProvider
+                        .GetRequiredService<IJobLock>()
+                        .TryAcquireAsync("bank-sync", stoppingToken);
+                    if (lease is null)
+                        continue;
+
                     var syncService = scope.ServiceProvider.GetRequiredService<IBankSyncService>();
                     var logs = await syncService.SyncAllConnectionsAsync();
                     var imported = logs.Sum(l => l.TransactionsImported);

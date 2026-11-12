@@ -1,0 +1,63 @@
+# Production-style stack: Postgres, a one-off migration job, the API and
+# the web front end (nginx), reachable on http://localhost:${WEB_PORT:-8080}.
+# Put a TLS-terminating proxy or your host's load balancer in front of
+# "web" in production. Copy .env.example to .env and fill it in first.
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: finance_manager
+      POSTGRES_USER: finance_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finance_app -d finance_manager"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ./backend
+      target: migrator
+    environment:
+      ConnectionStrings__DefaultConnection: &db-connection "Host=db;Port=5432;Database=finance_manager;Username=finance_app;Password=${POSTGRES_PASSWORD}"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./backend
+      target: api
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ConnectionStrings__DefaultConnection: *db-connection
+      DataProtection__CertificatePath: /run/secrets/dataprotection.pfx
+      DataProtection__CertificatePassword: ${DATAPROTECTION_CERT_PASSWORD:-}
+    secrets:
+      - dataprotection.pfx
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend/finance-web
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+secrets:
+  dataprotection.pfx:
+    file: ${DATAPROTECTION_CERT_FILE:-./secrets/dataprotection.pfx}
+
+volumes:
+  db-data:

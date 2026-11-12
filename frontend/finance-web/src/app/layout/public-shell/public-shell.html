@@ -1,0 +1,23 @@
+<header class="site-header">
+  <a routerLink="/" class="brand" aria-label="Finance Manager home">
+    <span class="brand-mark" aria-hidden="true">F</span>
+    Finance Manager
+  </a>
+  <nav aria-label="Main">
+    <a routerLink="/pricing" routerLinkActive="active">Pricing</a>
+    <a routerLink="/login">Sign in</a>
+    <a routerLink="/register" class="cta">Get started</a>
+  </nav>
+</header>
+
+<main>
+  <router-outlet />
+</main>
+
+<footer class="site-footer">
+  <span>© {{ year }} Finance Manager</span>
+  <nav aria-label="Footer">
+    <a routerLink="/pricing">Pricing</a>
+    <a [href]="'mailto:' + supportEmail">Support</a>
+  </nav>
+</footer>

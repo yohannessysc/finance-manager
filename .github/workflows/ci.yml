@@ -26,6 +26,14 @@ jobs:
       - name: Build and test
         run: dotnet test backend/FinanceManager.slnx --no-restore --configuration Release
 
+      - name: Check for vulnerable packages
+        run: |
+          dotnet list backend/FinanceManager.slnx package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "::error::Vulnerable NuGet packages found"
+            exit 1
+          fi
+
   frontend:
     name: Frontend checks
     runs-on: ubuntu-latest
@@ -46,8 +54,60 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Production dependencies only: dev tooling never ships to users.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Test
         run: npm test -- --watch=false
 
       - name: Build
         run: npm run build
+
+  publish:
+    name: Publish images
+    # Only main, and only after both test jobs pass.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: api
+            context: backend
+            target: api
+          - image: migrator
+            context: backend
+            target: migrator
+          - image: web
+            context: frontend/finance-web
+            target: web
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          push: true
+          # The commit tag pins a deploy; latest tracks main.
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/finance-manager-${{ matrix.image }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/finance-manager-${{ matrix.image }}:latest
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}

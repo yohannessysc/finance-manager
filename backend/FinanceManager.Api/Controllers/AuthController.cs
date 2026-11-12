@@ -9,6 +9,7 @@ using FinanceManager.Infrastructure.Identity;
 using FinanceManager.Infrastructure.Persistence;
 using FinanceManager.Infrastructure.Services;
 
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -262,47 +263,121 @@ public class AuthController : ControllerBase
             });
         }
 
-        // Password verified. Record a server-side session and
-        // bind the authentication cookie to it.
+        // Password verified. With MFA on, the user must also prove the
+        // second factor; until then only a short-lived cookie naming the
+        // user is issued (no session, no auth cookie).
+        if (await _userManager.GetTwoFactorEnabledAsync(user))
+        {
+            await HttpContext.SignInAsync(
+                IdentityConstants.TwoFactorUserIdScheme,
+                new System.Security.Claims.ClaimsPrincipal(
+                    new System.Security.Claims.ClaimsIdentity(
+                        [new System.Security.Claims.Claim(
+                            System.Security.Claims.ClaimTypes.Name,
+                            user.Id.ToString())],
+                        IdentityConstants.TwoFactorUserIdScheme)));
+
+            return Ok(new { requiresTwoFactor = true });
+        }
+
+        return Ok(await CompleteSignInAsync(user));
+    }
+
+    [HttpPost("login/two-factor")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth-login")]
+    [ServiceFilter(typeof(ValidateCsrfTokenFilter))]
+    public async Task<IActionResult> LoginTwoFactor(
+        [FromBody] TwoFactorLoginRequest request)
+    {
+        var user = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+
+        if (user is null)
+        {
+            return Unauthorized(new
+            {
+                code = "TWO_FACTOR_EXPIRED",
+                message = "Your sign-in timed out. Please enter your password again."
+            });
+        }
+
+        if (await _userManager.IsLockedOutAsync(user))
+        {
+            return StatusCode(StatusCodes.Status423Locked, new
+            {
+                code = "ACCOUNT_LOCKED",
+                message = "Too many unsuccessful login attempts. Please try again later."
+            });
+        }
+
+        var valid = request.IsRecoveryCode
+            ? (await _userManager.RedeemTwoFactorRecoveryCodeAsync(
+                user,
+                NormalizeRecoveryCode(request.Code))).Succeeded
+            : await _userManager.VerifyTwoFactorTokenAsync(
+                user,
+                _userManager.Options.Tokens.AuthenticatorTokenProvider,
+                (request.Code ?? string.Empty).Replace(" ", "").Replace("-", ""));
+
+        if (!valid)
+        {
+            // Same lockout counter as passwords, so codes cannot be brute forced.
+            await _userManager.AccessFailedAsync(user);
+            return Unauthorized(new
+            {
+                code = "INVALID_TWO_FACTOR_CODE",
+                message = "That code is not valid. Check your authenticator app and try again."
+            });
+        }
+
+        await _userManager.ResetAccessFailedCountAsync(user);
+        await HttpContext.SignOutAsync(IdentityConstants.TwoFactorUserIdScheme);
+
+        return Ok(await CompleteSignInAsync(user));
+    }
+
+    // Recovery codes are stored as "XXXXX-XXXXX" and must match exactly;
+    // accept them typed in lower case or without the dash.
+    private static string NormalizeRecoveryCode(string? code)
+    {
+        var compact = (code ?? string.Empty)
+            .Replace(" ", "")
+            .Replace("-", "")
+            .ToUpperInvariant();
+
+        return compact.Length == 10
+            ? $"{compact[..5]}-{compact[5..]}"
+            : compact;
+    }
+
+    // Records a server-side session and issues the auth cookie bound to it.
+    private async Task<AuthUserResponse> CompleteSignInAsync(ApplicationUser user)
+    {
         var session = await _sessions.CreateAsync(
             user.Id,
             Request.Headers.UserAgent.ToString(),
             UserSessionService.Lifetime,
             HttpContext.RequestAborted);
 
-        // Add session claim to user (required for cookie validation)
-        // First, remove any existing fm_sid claims from previous logins
-        var existingSessionClaims = await _userManager.GetClaimsAsync(user);
-        var oldSessionClaims = existingSessionClaims
-            .Where(c => c.Type == UserSessionService.SessionClaimType)
-            .ToList();
-        
-        foreach (var oldClaim in oldSessionClaims)
-        {
-            await _userManager.RemoveClaimAsync(user, oldClaim);
-        }
-
-        // Add the new session claim
-        var sessionClaim = new System.Security.Claims.Claim(
-            UserSessionService.SessionClaimType,
-            session.Id.ToString());
-        
-        await _userManager.AddClaimAsync(user, sessionClaim);
-
-        // Sign in will now include the fm_sid claim from the user's claims
-        await _signInManager.SignInAsync(
+        // The session id lives only in this device's cookie (never on the
+        // user record), so each device keeps its own session and revoking
+        // one device's session signs out exactly that device.
+        await _signInManager.SignInWithClaimsAsync(
             user,
-            isPersistent: false);
+            isPersistent: false,
+            [new System.Security.Claims.Claim(
+                UserSessionService.SessionClaimType,
+                session.Id.ToString())]);
 
         await _sessions.PurgeOldAsync(
             user.Id,
             HttpContext.RequestAborted);
 
-        return Ok(new AuthUserResponse(
+        return new AuthUserResponse(
             user.Id,
             user.FirstName,
             user.LastName,
-            user.Email!));
+            user.Email!);
     }
 
     // ---------------------------------------
@@ -700,6 +775,10 @@ public class AuthController : ControllerBase
         return frontendUrl.TrimEnd('/');
     }
 }
+
+public record TwoFactorLoginRequest(
+    string Code,
+    bool IsRecoveryCode = false);
 
 public record ConfirmEmailRequest(
     string Email,

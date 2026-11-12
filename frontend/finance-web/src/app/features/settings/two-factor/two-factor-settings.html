@@ -1,0 +1,95 @@
+<h3 class="subheading">Two-step verification</h3>
+
+@if (status(); as current) {
+  @if (recoveryCodes().length) {
+    <div class="recovery-codes" role="region" aria-label="Recovery codes">
+      <strong>Save your recovery codes</strong>
+      <p>Each code signs you in once if you lose your phone. They won't be shown again.</p>
+      <ol>
+        @for (code of recoveryCodes(); track code) {
+          <li><code>{{ code }}</code></li>
+        }
+      </ol>
+      <div class="actions">
+        <button type="button" class="secondary-button" (click)="downloadCodes()">Download</button>
+        <button type="button" class="primary-button" (click)="dismissCodes()">I've saved them</button>
+      </div>
+    </div>
+  }
+
+  @switch (mode()) {
+    @case ('setup') {
+      @if (setup(); as details) {
+        <ol class="setup-steps">
+          <li>Scan this code with an authenticator app such as Google Authenticator, 1Password or Authy.</li>
+        </ol>
+        <img class="qr-code" [src]="qrCode()" alt="QR code for your authenticator app" width="180" height="180" />
+        <p class="help">Can't scan it? Enter this key instead: <code class="shared-key">{{ details.sharedKey }}</code></p>
+
+        <form [formGroup]="codeForm" (ngSubmit)="confirmSetup()">
+          <label class="field">
+            <span>Enter the 6-digit code from the app</span>
+            <input type="text" inputmode="numeric" autocomplete="one-time-code" formControlName="code" placeholder="123456" />
+          </label>
+          <div class="actions">
+            <button type="button" class="secondary-button" (click)="cancel()">Cancel</button>
+            <button type="submit" class="primary-button" [disabled]="busy()">
+              {{ busy() ? 'Verifying...' : 'Turn on' }}
+            </button>
+          </div>
+        </form>
+      }
+    }
+
+    @case ('disable') {
+      <ng-container *ngTemplateOutlet="passwordPrompt; context: { label: 'Turn off two-step verification' }" />
+    }
+
+    @case ('regenerate') {
+      <ng-container *ngTemplateOutlet="passwordPrompt; context: { label: 'Create new recovery codes' }" />
+    }
+
+    @default {
+      <div class="status-row">
+        <div>
+          <strong>{{ current.enabled ? 'On' : 'Off' }}</strong>
+          <p>
+            @if (current.enabled) {
+              Signing in needs your password and a code from your authenticator app.
+              {{ current.recoveryCodesLeft }} recovery codes left.
+            } @else {
+              Add a code from an authenticator app to your sign-in, so a stolen password isn't enough.
+            }
+          </p>
+        </div>
+        <div class="actions">
+          @if (current.enabled) {
+            <button type="button" class="secondary-button" (click)="ask('regenerate')">New recovery codes</button>
+            <button type="button" class="secondary-button danger" (click)="ask('disable')">Turn off</button>
+          } @else {
+            <button type="button" class="primary-button" [disabled]="busy()" (click)="startSetup()">
+              {{ busy() ? 'Starting...' : 'Set up' }}
+            </button>
+          }
+        </div>
+      </div>
+    }
+  }
+}
+
+@if (error()) {
+  <p class="error" role="alert">{{ error() }}</p>
+}
+
+<ng-template #passwordPrompt let-label="label">
+  <form [formGroup]="passwordForm" (ngSubmit)="confirmPassword()">
+    <label class="field">
+      <span>Enter your password to continue</span>
+      <input type="password" autocomplete="current-password" formControlName="password" />
+    </label>
+    <div class="actions">
+      <button type="button" class="secondary-button" (click)="cancel()">Cancel</button>
+      <button type="submit" class="primary-button" [disabled]="busy()">{{ busy() ? 'Working...' : label }}</button>
+    </div>
+  </form>
+</ng-template>

@@ -25,73 +25,70 @@ import { AuthService } from '../../../core/auth/auth.service';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="plaid-link-container">
-      <button 
-        (click)="openPlaidLink()" 
-        [disabled]="isLoading()"
-        class="connect-bank-btn">
-        {{ isLoading() ? 'Loading...' : '🏦 Connect Bank Account' }}
+    <div class="plaid-link">
+      <div>
+        <strong>Connect a bank</strong>
+        <p>Sign in to your bank through Plaid. Finance Manager never sees your bank password.</p>
+      </div>
+      <button type="button" (click)="openPlaidLink()" [disabled]="isLoading()">
+        {{ isLoading() ? 'Connecting...' : 'Connect bank' }}
       </button>
-      
-      <div *ngIf="error()" class="error-message">
-        {{ error() }}
-      </div>
-      
-      <div *ngIf="successMessage()" class="success-message">
-        {{ successMessage() }}
-      </div>
     </div>
+    <p *ngIf="error()" class="message error" role="alert">{{ error() }}</p>
+    <p *ngIf="successMessage()" class="message success" role="status">{{ successMessage() }}</p>
   `,
   styles: [`
-    .plaid-link-container {
-      padding: 1.5rem;
-      border: 1px solid #e0e0e0;
-      border-radius: 8px;
-      max-width: 400px;
-      margin: 1rem 0;
+    :host {
+      display: block;
     }
-
-    .connect-bank-btn {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 1rem;
-      font-weight: 600;
+    .plaid-link {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 20px;
+      border: 1px solid var(--fm-border);
+      border-radius: 14px;
+      background: var(--fm-surface);
+    }
+    strong {
+      font-size: 14px;
+    }
+    p {
+      margin: 4px 0 0;
+      color: var(--fm-muted);
+      font-size: 12px;
+    }
+    button {
+      min-height: 40px;
+      padding: 10px 16px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--fm-primary);
+      color: #fff;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 800;
       cursor: pointer;
-      transition: transform 0.2s, box-shadow 0.2s;
     }
-
-    .connect-bank-btn:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    }
-
-    .connect-bank-btn:disabled {
-      opacity: 0.6;
+    button:disabled {
+      opacity: .6;
       cursor: not-allowed;
     }
-
-    .error-message {
-      margin-top: 1rem;
-      padding: 0.75rem;
-      background-color: #fee;
-      color: #c33;
-      border-left: 4px solid #c33;
-      border-radius: 4px;
-      font-size: 0.9rem;
+    .message {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
     }
-
-    .success-message {
-      margin-top: 1rem;
-      padding: 0.75rem;
-      background-color: #efe;
-      color: #3c3;
-      border-left: 4px solid #3c3;
-      border-radius: 4px;
-      font-size: 0.9rem;
+    .error {
+      background: rgba(180, 35, 24, 0.1);
+      color: #b42318;
+    }
+    .success {
+      background: var(--fm-primary-soft);
+      color: var(--fm-primary);
     }
   `]
 })
@@ -208,8 +205,8 @@ export class PlaidLinkComponent implements OnDestroy {
 
       this.successMessage.set(
         imported > 0
-          ? `✅ Connected to ${connection.institutionName} — imported ${imported} transactions into your accounts.`
-          : `✅ Connected to ${connection.institutionName}. Transactions will appear shortly.`
+          ? `Connected to ${connection.institutionName}. Imported ${imported} transactions into your accounts.`
+          : `Connected to ${connection.institutionName}. Transactions will appear shortly.`
       );
       this.connected.emit({ ...connection, transactionCount: imported });
     } catch (err: any) {

@@ -101,6 +101,8 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("LastSyncAtUtc");
 
+                    b.HasIndex("PlaidItemId");
+
                     b.HasIndex("Status");
 
                     b.HasIndex("UserId");

@@ -4,4 +4,5 @@
   <Project Path="FinanceManager.Domain/FinanceManager.Domain.csproj" />
   <Project Path="FinanceManager.Infrastructure/FinanceManager.Infrastructure.csproj" />
   <Project Path="FinanceManager.Application.Tests/FinanceManager.Application.Tests.csproj" />
+  <Project Path="FinanceManager.Api.IntegrationTests/FinanceManager.Api.IntegrationTests.csproj" />
 </Solution>

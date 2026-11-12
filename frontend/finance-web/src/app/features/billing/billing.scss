@@ -1,0 +1,137 @@
+:host {
+  display: block;
+  color: var(--fm-text);
+}
+
+.billing-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.page-heading {
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  color: var(--fm-primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+h1 {
+  margin: 8px 0;
+  font-size: 32px;
+}
+
+.page-heading p,
+.state-message,
+.subscription-summary span {
+  color: var(--fm-muted);
+}
+
+.notice,
+.error-message {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 10px;
+}
+
+.notice {
+  background: var(--fm-primary-soft);
+  color: var(--fm-primary);
+}
+
+.error-message {
+  background: rgba(180, 35, 24, 0.1);
+  color: #b42318;
+}
+
+.subscription-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--fm-border);
+  border-radius: 14px;
+  background: var(--fm-surface);
+}
+
+.subscription-summary div {
+  display: grid;
+  gap: 4px;
+}
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid var(--fm-border);
+  border-radius: 16px;
+  background: var(--fm-surface);
+}
+
+.plan-card.current {
+  border-color: var(--fm-primary);
+  box-shadow: 0 0 0 1px var(--fm-primary);
+}
+
+.plan-card h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.price {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.plan-card ul {
+  flex: 1;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--fm-muted);
+  line-height: 1.8;
+}
+
+.current-label {
+  color: var(--fm-primary);
+  font-weight: 800;
+}
+
+.primary-button,
+.outline-button {
+  padding: 11px 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primary-button {
+  border: 0;
+  background: var(--fm-primary);
+  color: #ffffff;
+}
+
+.outline-button {
+  border: 1px solid var(--fm-border);
+  background: transparent;
+  color: var(--fm-text);
+}
+
+.primary-button:disabled,
+.outline-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

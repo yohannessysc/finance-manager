@@ -18,7 +18,8 @@ public interface IPlaidService
         string? userEmail = null,
         string? userName = null,
         string[]? countryCodes = null,
-        string[]? institutionIds = null);
+        string[]? institutionIds = null,
+        string? accessToken = null);
 
     /// <summary>
     /// Exchange public token for access token after user completes Plaid Link
@@ -44,6 +45,17 @@ public interface IPlaidService
     /// Remove an item (revoke access token)
     /// </summary>
     Task RemoveItemAsync(string accessToken);
+
+    /// <summary>
+    /// Incremental transaction sync (/transactions/sync). Pass the stored cursor
+    /// (null for the first sync). Follows has_more pages internally.
+    /// </summary>
+    Task<PlaidSyncResult> SyncTransactionsAsync(string accessToken, string? cursor);
+
+    /// <summary>
+    /// Recurring inflow/outflow streams detected by Plaid (/transactions/recurring/get)
+    /// </summary>
+    Task<PlaidRecurringResult> GetRecurringStreamsAsync(string accessToken);
 }
 
 /// <summary>
@@ -78,6 +90,9 @@ public class PlaidAccount
     public string Subtype { get; set; } = string.Empty;
     public decimal Balance { get; set; }
     public string Currency { get; set; } = "CAD";
+    /// <summary>depository, credit, loan, investment, other</summary>
+    public string Type { get; set; } = string.Empty;
+    public string? Mask { get; set; }
 }
 
 public class PlaidTransactionsResult
@@ -98,6 +113,50 @@ public class PlaidTransaction
     public string Name { get; set; } = string.Empty;
     public string? MerchantName { get; set; }
     public List<string> Categories { get; set; } = new();
+    public bool Pending { get; set; }
+    /// <summary>Plaid personal_finance_category.primary, e.g. FOOD_AND_DRINK</summary>
+    public string? PrimaryCategory { get; set; }
+    /// <summary>Plaid personal_finance_category.detailed, e.g. FOOD_AND_DRINK_GROCERIES</summary>
+    public string? DetailedCategory { get; set; }
+}
+
+public class PlaidSyncResult
+{
+    public List<PlaidTransaction> Added { get; set; } = new();
+    public List<PlaidTransaction> Modified { get; set; } = new();
+    public List<string> RemovedTransactionIds { get; set; } = new();
+    public string? NextCursor { get; set; }
+    /// <summary>
+    /// False right after linking, while Plaid is still pulling history
+    /// (transactions_update_status = NOT_READY).
+    /// </summary>
+    public bool HistoryReady { get; set; } = true;
+}
+
+public class PlaidRecurringResult
+{
+    public List<PlaidRecurringStream> Inflows { get; set; } = new();
+    public List<PlaidRecurringStream> Outflows { get; set; } = new();
+}
+
+public class PlaidRecurringStream
+{
+    public string StreamId { get; set; } = string.Empty;
+    public string AccountId { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string? MerchantName { get; set; }
+    /// <summary>WEEKLY, BIWEEKLY, SEMI_MONTHLY, MONTHLY, ANNUALLY, UNKNOWN</summary>
+    public string Frequency { get; set; } = string.Empty;
+    public decimal AverageAmount { get; set; }
+    public decimal LastAmount { get; set; }
+    public DateTime FirstDate { get; set; }
+    public DateTime LastDate { get; set; }
+    public DateTime? PredictedNextDate { get; set; }
+    public bool IsActive { get; set; }
+    /// <summary>EARLY_DETECTION, MATURE, TOMBSTONED, UNKNOWN</summary>
+    public string Status { get; set; } = string.Empty;
+    public string? PrimaryCategory { get; set; }
+    public List<string> TransactionIds { get; set; } = new();
 }
 
 /// <summary>
@@ -134,31 +193,41 @@ public class PlaidService : IPlaidService
         string? userEmail = null,
         string? userName = null,
         string[]? countryCodes = null,
-        string[]? institutionIds = null)
+        string[]? institutionIds = null,
+        string? accessToken = null)
     {
         try
         {
             _logger.LogInformation("Creating Plaid Link token for user {UserId}", userId);
 
-            var request = new
+            var userDict = new Dictionary<string, object?>
             {
-                client_id = _options.ClientId,
-                secret = _options.Secret,
-                user = new
-                {
-                    client_user_id = userId,
-                    email_address = userEmail,
-                    phone_number = userName
-                },
-                client_name = "Finance Manager",
-                language = "en",
-                country_codes = countryCodes ?? new[] { "CA" },
-                products = new[] { "auth", "transactions" },
-                redirect_uri = _options.RedirectUri
+                { "client_user_id", userId }
+            };
+            if (!string.IsNullOrEmpty(userEmail))
+            {
+                userDict["email_address"] = userEmail;
+            }
+
+            var request = new Dictionary<string, object?>
+            {
+                ["client_id"] = _options.ClientId,
+                ["secret"] = _options.Secret,
+                ["user"] = userDict,
+                ["client_name"] = "Finance Manager",
+                ["language"] = "en",
+                ["country_codes"] = countryCodes ?? new[] { "CA" }
             };
 
+            // Update mode (re-authenticating an existing item) passes the
+            // item's access token instead of products.
+            if (accessToken is null)
+                request["products"] = new[] { "auth", "transactions" };
+            else
+                request["access_token"] = accessToken;
+
             var response = await _httpClient.PostAsJsonAsync("/link/token/create", request);
-            response.EnsureSuccessStatusCode();
+            await EnsurePlaidSuccessAsync(response);
 
             var json = await response.Content.ReadAsStringAsync();
             var doc = JsonDocument.Parse(json);
@@ -192,7 +261,7 @@ public class PlaidService : IPlaidService
             };
 
             var response = await _httpClient.PostAsJsonAsync("/item/public_token/exchange", request);
-            response.EnsureSuccessStatusCode();
+            await EnsurePlaidSuccessAsync(response);
 
             var json = await response.Content.ReadAsStringAsync();
             var doc = JsonDocument.Parse(json);
@@ -214,65 +283,180 @@ public class PlaidService : IPlaidService
 
     public async Task<PlaidAccountsResult> GetAccountsAsync(string accessToken)
     {
-        try
+        _logger.LogInformation("Fetching accounts for Plaid item");
+
+        using var doc = await PostAsync("/accounts/get", new
         {
-            _logger.LogInformation("Fetching accounts for Plaid item");
+            client_id = _options.ClientId,
+            secret = _options.Secret,
+            access_token = accessToken
+        });
+        var root = doc.RootElement;
 
-            var request = new
+        var accounts = new List<PlaidAccount>();
+        foreach (var account in root.GetProperty("accounts").EnumerateArray())
+        {
+            var balances = account.GetProperty("balances");
+            accounts.Add(new PlaidAccount
             {
-                client_id = _options.ClientId,
-                secret = _options.Secret,
-                access_token = accessToken
+                AccountId = Str(account, "account_id") ?? "",
+                Name = Str(account, "name") ?? "Account",
+                Subtype = Str(account, "subtype") ?? "",
+                Type = Str(account, "type") ?? "",
+                Mask = Str(account, "mask"),
+                Balance = Dec(balances, "current") ?? Dec(balances, "available") ?? 0m,
+                Currency = Str(balances, "iso_currency_code") ?? "CAD"
+            });
+        }
+
+        return new PlaidAccountsResult
+        {
+            ItemId = Str(root.GetProperty("item"), "item_id") ?? "",
+            Accounts = accounts,
+            RequestId = Str(root, "request_id") ?? ""
+        };
+    }
+
+    public async Task<PlaidSyncResult> SyncTransactionsAsync(string accessToken, string? cursor)
+    {
+        var result = new PlaidSyncResult();
+        var currentCursor = cursor;
+        var hasMore = true;
+        var pages = 0;
+
+        while (hasMore && pages++ < 50)
+        {
+            var body = new Dictionary<string, object?>
+            {
+                ["client_id"] = _options.ClientId,
+                ["secret"] = _options.Secret,
+                ["access_token"] = accessToken,
+                ["count"] = 500
             };
+            if (!string.IsNullOrEmpty(currentCursor)) body["cursor"] = currentCursor;
 
-            var response = await _httpClient.PostAsJsonAsync("/auth/get", request);
-            response.EnsureSuccessStatusCode();
-
-            var json = await response.Content.ReadAsStringAsync();
-            var doc = JsonDocument.Parse(json);
+            using var doc = await PostAsync("/transactions/sync", body);
             var root = doc.RootElement;
 
-            var accounts = new List<PlaidAccount>();
-            if (root.TryGetProperty("accounts", out var accountsArray))
+            foreach (var t in root.GetProperty("added").EnumerateArray())
+                result.Added.Add(ParseTransaction(t));
+            foreach (var t in root.GetProperty("modified").EnumerateArray())
+                result.Modified.Add(ParseTransaction(t));
+            foreach (var t in root.GetProperty("removed").EnumerateArray())
             {
-                foreach (var account in accountsArray.EnumerateArray())
-                {
-                    var balance = 0m;
-                    if (account.TryGetProperty("balances", out var balances))
-                    {
-                        if (balances.TryGetProperty("current", out var currentBalance))
-                        {
-                            balance = (decimal?)currentBalance.GetDecimal() ?? 0m;
-                        }
-                    }
-
-                    accounts.Add(new PlaidAccount
-                    {
-                        AccountId = account.GetProperty("account_id").GetString() ?? "",
-                        Name = account.GetProperty("name").GetString() ?? "Unknown",
-                        Subtype = account.GetProperty("subtype").GetString() ?? "Unknown",
-                        Balance = balance,
-                        Currency = account.TryGetProperty("balances", out var bal) && 
-                                  bal.TryGetProperty("iso_currency_code", out var curr)
-                            ? curr.GetString() ?? "CAD" : "CAD"
-                    });
-                }
+                var id = Str(t, "transaction_id");
+                if (id != null) result.RemovedTransactionIds.Add(id);
             }
 
-            var itemId = root.GetProperty("item").GetProperty("item_id").GetString() ?? "";
+            if (Str(root, "transactions_update_status") == "NOT_READY")
+                result.HistoryReady = false;
 
-            return new PlaidAccountsResult
-            {
-                ItemId = itemId,
-                Accounts = accounts,
-                RequestId = root.GetProperty("request_id").GetString() ?? ""
-            };
+            currentCursor = Str(root, "next_cursor");
+            hasMore = root.TryGetProperty("has_more", out var hm) && hm.GetBoolean();
         }
-        catch (Exception ex)
+
+        result.NextCursor = currentCursor;
+        _logger.LogInformation(
+            "Plaid sync: {Added} added, {Modified} modified, {Removed} removed, ready={Ready}",
+            result.Added.Count, result.Modified.Count, result.RemovedTransactionIds.Count, result.HistoryReady);
+        return result;
+    }
+
+    public async Task<PlaidRecurringResult> GetRecurringStreamsAsync(string accessToken)
+    {
+        using var doc = await PostAsync("/transactions/recurring/get", new
         {
-            _logger.LogError(ex, "Failed to fetch accounts");
-            throw;
+            client_id = _options.ClientId,
+            secret = _options.Secret,
+            access_token = accessToken
+        });
+        var root = doc.RootElement;
+
+        return new PlaidRecurringResult
+        {
+            Inflows = root.GetProperty("inflow_streams").EnumerateArray().Select(ParseStream).ToList(),
+            Outflows = root.GetProperty("outflow_streams").EnumerateArray().Select(ParseStream).ToList()
+        };
+    }
+
+    private async Task<JsonDocument> PostAsync(string path, object body)
+    {
+        var response = await _httpClient.PostAsJsonAsync(path, body);
+        await EnsurePlaidSuccessAsync(response);
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+    }
+
+    private static PlaidTransaction ParseTransaction(JsonElement t)
+    {
+        string? primary = null, detailed = null;
+        if (t.TryGetProperty("personal_finance_category", out var pfc) &&
+            pfc.ValueKind == JsonValueKind.Object)
+        {
+            primary = Str(pfc, "primary");
+            detailed = Str(pfc, "detailed");
         }
+
+        // Prefer the date the purchase was made over the posting date
+        var date = Date(t, "authorized_date") ?? Date(t, "date") ?? DateTime.UtcNow.Date;
+
+        return new PlaidTransaction
+        {
+            TransactionId = Str(t, "transaction_id") ?? "",
+            AccountId = Str(t, "account_id") ?? "",
+            Amount = Dec(t, "amount") ?? 0m,
+            Currency = Str(t, "iso_currency_code") ?? "CAD",
+            Date = date,
+            Name = Str(t, "name") ?? "Unknown",
+            MerchantName = Str(t, "merchant_name"),
+            Pending = t.TryGetProperty("pending", out var p) && p.ValueKind == JsonValueKind.True,
+            PrimaryCategory = primary,
+            DetailedCategory = detailed,
+            Categories = primary != null ? new List<string> { primary } : new List<string>()
+        };
+    }
+
+    private static PlaidRecurringStream ParseStream(JsonElement s)
+    {
+        string? primary = null;
+        if (s.TryGetProperty("personal_finance_category", out var pfc) &&
+            pfc.ValueKind == JsonValueKind.Object)
+            primary = Str(pfc, "primary");
+
+        return new PlaidRecurringStream
+        {
+            StreamId = Str(s, "stream_id") ?? "",
+            AccountId = Str(s, "account_id") ?? "",
+            Description = Str(s, "description") ?? "",
+            MerchantName = Str(s, "merchant_name"),
+            Frequency = Str(s, "frequency") ?? "UNKNOWN",
+            AverageAmount = s.TryGetProperty("average_amount", out var avg) ? Dec(avg, "amount") ?? 0m : 0m,
+            LastAmount = s.TryGetProperty("last_amount", out var last) ? Dec(last, "amount") ?? 0m : 0m,
+            FirstDate = Date(s, "first_date") ?? DateTime.UtcNow.Date,
+            LastDate = Date(s, "last_date") ?? DateTime.UtcNow.Date,
+            PredictedNextDate = Date(s, "predicted_next_date"),
+            IsActive = s.TryGetProperty("is_active", out var a) && a.ValueKind == JsonValueKind.True,
+            Status = Str(s, "status") ?? "UNKNOWN",
+            PrimaryCategory = primary,
+            TransactionIds = s.TryGetProperty("transaction_ids", out var ids)
+                ? ids.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => x != "").ToList()
+                : new List<string>()
+        };
+    }
+
+    private static string? Str(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private static decimal? Dec(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDecimal() : null;
+
+    private static DateTime? Date(JsonElement e, string name)
+    {
+        var str = Str(e, name);
+        return str != null && DateTime.TryParse(str, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+            out var d)
+            ? DateTime.SpecifyKind(d.Date, DateTimeKind.Utc)
+            : null;
     }
 
     public async Task<PlaidTransactionsResult> GetTransactionsAsync(
@@ -304,7 +488,7 @@ public class PlaidService : IPlaidService
             };
 
             var response = await _httpClient.PostAsJsonAsync("/transactions/get", request);
-            response.EnsureSuccessStatusCode();
+            await EnsurePlaidSuccessAsync(response);
 
             var json = await response.Content.ReadAsStringAsync();
             var doc = JsonDocument.Parse(json);
@@ -369,7 +553,7 @@ public class PlaidService : IPlaidService
             };
 
             var response = await _httpClient.PostAsJsonAsync("/item/remove", request);
-            response.EnsureSuccessStatusCode();
+            await EnsurePlaidSuccessAsync(response);
 
             _logger.LogInformation("Successfully removed Plaid item");
         }
@@ -378,5 +562,27 @@ public class PlaidService : IPlaidService
             _logger.LogError(ex, "Failed to remove Plaid item");
             throw;
         }
+    }
+
+    /// <summary>
+    /// Throws with Plaid's error_code / error_message instead of a generic HTTP status error
+    /// </summary>
+    private static async Task EnsurePlaidSuccessAsync(HttpResponseMessage response)
+    {
+        if (response.IsSuccessStatusCode) return;
+
+        var body = await response.Content.ReadAsStringAsync();
+        string message = body;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            var code = root.TryGetProperty("error_code", out var c) ? c.GetString() : null;
+            var msg = root.TryGetProperty("error_message", out var m) ? m.GetString() : null;
+            message = $"Plaid {code}: {msg}";
+        }
+        catch (JsonException) { }
+
+        throw new HttpRequestException(message, null, response.StatusCode);
     }
 }

@@ -2,6 +2,7 @@
 using FinanceManager.Domain.Entities;
 using FinanceManager.Infrastructure.Identity;
 
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -9,13 +10,23 @@ using Microsoft.EntityFrameworkCore;
 namespace FinanceManager.Infrastructure.Persistence;
 
 public class FinanceDbContext
-    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
+    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>,
+      IDataProtectionKeyContext
 {
     public FinanceDbContext(
         DbContextOptions<FinanceDbContext> options)
         : base(options)
     {
     }
+
+    // ASP.NET Data Protection keys, shared by every app instance so
+    // auth cookies and encrypted bank tokens survive restarts.
+    public DbSet<DataProtectionKey> DataProtectionKeys
+        => Set<DataProtectionKey>();
+
+    // Stripe subscription mirror, one row per paying (or once paying) user
+    public DbSet<UserSubscription> UserSubscriptions
+        => Set<UserSubscription>();
 
     // Financial accounts
     public DbSet<FinancialAccount> FinancialAccounts
@@ -97,6 +108,17 @@ public class FinanceDbContext
                 .IsRequired()
                 .HasMaxLength(50);
 
+            entity.Property(x => x.ExternalAccountId)
+                .HasMaxLength(100);
+
+            entity.Property(x => x.Mask)
+                .HasMaxLength(10);
+
+            // One app account per bank account per connection
+            entity.HasIndex(x => new { x.BankConnectionId, x.ExternalAccountId })
+                .IsUnique()
+                .HasFilter("\"ExternalAccountId\" IS NOT NULL");
+
             entity.Property(x => x.Currency)
                 .IsRequired()
                 .HasMaxLength(3);
@@ -162,6 +184,13 @@ public class FinanceDbContext
             entity.ToTable("RecurringTransactions");
 
             entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.ExternalStreamId)
+                .HasMaxLength(100);
+
+            entity.HasIndex(x => new { x.UserId, x.ExternalStreamId })
+                .IsUnique()
+                .HasFilter("\"ExternalStreamId\" IS NOT NULL");
 
             entity.Property(x => x.Type)
                 .IsRequired();
@@ -571,7 +600,37 @@ public class FinanceDbContext
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Existing rows are backfilled in the migration. No model
+            // default: EF would swap an explicit false/0 for the default.
+            entity.Property(x => x.GoalType)
+                .IsRequired();
+
+            entity.Property(x => x.AutoContributionAmount)
+                .HasPrecision(18, 2);
+
+            entity.Property(x => x.AutoContributionStartUtc)
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.NextAutoContributionUtc)
+                .HasColumnType("timestamp with time zone");
+
+            entity.HasOne<Household>()
+                .WithMany()
+                .HasForeignKey(x => x.HouseholdId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne<FinancialAccount>()
+                .WithMany()
+                .HasForeignKey(x => x.LinkedAccountId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             entity.HasIndex(x => new { x.UserId, x.CreatedAtUtc });
+            entity.HasIndex(x => x.HouseholdId);
+            entity.HasIndex(x => x.NextAutoContributionUtc);
+
+            // One goal per account, so a balance is never counted twice.
+            entity.HasIndex(x => x.LinkedAccountId)
+                .IsUnique();
         });
 
         modelBuilder.Entity<SavingsGoalContribution>(entity =>
@@ -605,12 +664,60 @@ public class FinanceDbContext
                 .HasForeignKey(x => x.SavingsGoalId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            entity.Property(x => x.ScheduledOccurrenceUtc)
+                .HasColumnType("timestamp with time zone");
+
             entity.HasIndex(x => new
             {
                 x.UserId,
                 x.SavingsGoalId,
                 x.ContributionDateUtc
             });
+
+            // Each scheduled occurrence posts at most once.
+            entity.HasIndex(x => new
+            {
+                x.SavingsGoalId,
+                x.ScheduledOccurrenceUtc
+            })
+                .IsUnique();
+        });
+
+        modelBuilder.Entity<UserSubscription>(entity =>
+        {
+            entity.ToTable("UserSubscriptions");
+
+            entity.HasKey(x => x.UserId);
+
+            entity.Property(x => x.StripeCustomerId)
+                .IsRequired()
+                .HasMaxLength(255);
+
+            entity.Property(x => x.StripeSubscriptionId)
+                .HasMaxLength(255);
+
+            entity.Property(x => x.Plan)
+                .IsRequired();
+
+            entity.Property(x => x.Status)
+                .HasMaxLength(40);
+
+            entity.Property(x => x.CurrentPeriodEndUtc)
+                .HasColumnType("timestamp with time zone");
+
+            entity.Property(x => x.UpdatedAtUtc)
+                .IsRequired()
+                .HasColumnType("timestamp with time zone");
+
+            entity.Ignore(x => x.EffectivePlan);
+
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(x => x.StripeCustomerId)
+                .IsUnique();
         });
 
         // ==========================================
@@ -628,6 +735,9 @@ public class FinanceDbContext
 
             entity.Property(x => x.PlaidItemId)
                 .HasMaxLength(100);
+
+            entity.Property(x => x.TransactionsCursor)
+                .HasMaxLength(1000);
 
             entity.Property(x => x.FinicityInstitutionName)
                 .HasMaxLength(200);
@@ -734,12 +844,12 @@ public class FinanceDbContext
                 .IsRequired()
                 .HasColumnType("timestamp with time zone");
 
-            entity.HasOne<BankConnection>()
+            entity.HasOne(x => x.BankConnection)
                 .WithMany(bc => bc.BankTransactions)
                 .HasForeignKey(x => x.BankConnectionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasOne<FinancialTransaction>()
+            entity.HasOne(x => x.FinancialTransaction)
                 .WithMany()
                 .HasForeignKey(x => x.FinancialTransactionId)
                 .OnDelete(DeleteBehavior.SetNull);
@@ -780,7 +890,7 @@ public class FinanceDbContext
             entity.Property(x => x.DetailedLog)
                 .HasColumnType("text");
 
-            entity.HasOne<BankConnection>()
+            entity.HasOne(x => x.BankConnection)
                 .WithMany(bc => bc.SyncLogs)
                 .HasForeignKey(x => x.BankConnectionId)
                 .OnDelete(DeleteBehavior.Cascade);

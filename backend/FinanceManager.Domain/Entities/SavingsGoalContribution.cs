@@ -14,5 +14,9 @@ public sealed class SavingsGoalContribution
 
     public string? Note { get; set; }
 
+    // Set for contributions posted by the goal's schedule; unique per
+    // goal so a schedule occurrence can never be posted twice.
+    public DateTime? ScheduledOccurrenceUtc { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }

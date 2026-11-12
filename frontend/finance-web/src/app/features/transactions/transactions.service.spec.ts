@@ -26,7 +26,7 @@ describe('TransactionsService CSV import', () => {
 
   afterEach(() => http.verify());
 
-  it('uploads the CSV file as multipart form data', () => {
+  it('uploads the CSV file as multipart form data', async () => {
     const file = new File(
       ['date,description,amount,account'],
       'transactions.csv',
@@ -40,9 +40,13 @@ describe('TransactionsService CSV import', () => {
     );
     expect(request.request.method).toBe('POST');
     expect(request.request.body).toBeInstanceOf(FormData);
-    expect(
-      (request.request.body as FormData).get('file')
-    ).toBe(file);
+    // jsdom's FormData stores a copy of the File, so compare by
+    // name, type and contents rather than object identity.
+    const uploaded = (request.request.body as FormData).get('file');
+    expect(uploaded).toBeInstanceOf(File);
+    expect((uploaded as File).name).toBe(file.name);
+    expect((uploaded as File).type).toBe(file.type);
+    expect(await (uploaded as File).text()).toBe(await file.text());
     request.flush({
       imported: 0,
       duplicates: 0,

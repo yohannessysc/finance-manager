@@ -1,6 +1,7 @@
 using FinanceManager.Application.DTOs.Bank;
 using FinanceManager.Application.Interfaces;
 using FinanceManager.Domain.Entities;
+using FinanceManager.Domain.Enums;
 using FinanceManager.Infrastructure.Persistence;
 using FinanceManager.Infrastructure.Services.Plaid;
 using Microsoft.EntityFrameworkCore;
@@ -16,12 +17,15 @@ public class BankConnectionService : IBankConnectionService
     private readonly FinanceDbContext _dbContext;
     private readonly IPlaidService _plaidService;
     private readonly ILogger<BankConnectionService> _logger;
+    private readonly IBankTokenProtector _tokenProtector;
 
     public BankConnectionService(
         FinanceDbContext dbContext,
         IPlaidService plaidService,
+        IBankTokenProtector tokenProtector,
         ILogger<BankConnectionService> logger)
     {
+        _tokenProtector = tokenProtector;
         _dbContext = dbContext;
         _plaidService = plaidService;
         _logger = logger;
@@ -78,7 +82,7 @@ public class BankConnectionService : IBankConnectionService
                 InstitutionName = request.Metadata?.InstitutionName ?? "Unknown",
                 InstitutionId = request.Metadata?.InstitutionId ?? "",
                 PlaidItemId = tokenResult.ItemId,
-                PlaidAccessToken = tokenResult.AccessToken, // Store securely in production
+                PlaidAccessToken = _tokenProtector.Protect(tokenResult.AccessToken),
                 Status = 1, // Connected
                 ConnectedAtUtc = DateTime.UtcNow,
                 ExpiresAtUtc = DateTime.UtcNow.AddYears(1) // Plaid items expire after 1 year
@@ -133,6 +137,52 @@ public class BankConnectionService : IBankConnectionService
         return MapToResponse(connection, transactionCount);
     }
 
+    public async Task<PlaidLinkTokenResponse?> CreateReconnectLinkTokenAsync(
+        Guid connectionId,
+        Guid userId)
+    {
+        var connection = await _dbContext.BankConnections
+            .AsNoTracking()
+            .FirstOrDefaultAsync(bc =>
+                bc.Id == connectionId &&
+                bc.UserId == userId &&
+                !bc.IsDeleted &&
+                bc.PlaidAccessToken != null);
+
+        if (connection is null)
+            return null;
+
+        var result = await _plaidService.CreateLinkTokenAsync(
+            userId.ToString(),
+            countryCodes: new[] { "CA" },
+            accessToken: _tokenProtector.Unprotect(connection.PlaidAccessToken!));
+
+        return new PlaidLinkTokenResponse
+        {
+            LinkToken = result.LinkToken,
+            ExpiresAtUtc = result.ExpiresAtUtc,
+            RequestId = result.RequestId
+        };
+    }
+
+    public async Task<bool> MarkReconnectedAsync(Guid connectionId, Guid userId)
+    {
+        var connection = await _dbContext.BankConnections
+            .FirstOrDefaultAsync(bc =>
+                bc.Id == connectionId &&
+                bc.UserId == userId &&
+                !bc.IsDeleted);
+
+        if (connection is null)
+            return false;
+
+        connection.Status = (int)BankConnectionStatus.Connected;
+        connection.ErrorMessage = null;
+        connection.UpdatedAtUtc = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<bool> DisconnectAsync(Guid connectionId, Guid userId)
     {
         var connection = await _dbContext.BankConnections
@@ -141,7 +191,22 @@ public class BankConnectionService : IBankConnectionService
         if (connection == null)
             return false;
 
-        // TODO: Call Plaid SDK to remove item
+        // Revoke access at Plaid so the item stops being billed / refreshed.
+        // Imported accounts and transactions are kept as the user's history.
+        if (!string.IsNullOrEmpty(connection.PlaidAccessToken))
+        {
+            try
+            {
+                await _plaidService.RemoveItemAsync(
+                    _tokenProtector.Unprotect(connection.PlaidAccessToken));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Plaid item removal failed for connection {ConnectionId}", connectionId);
+            }
+            connection.PlaidAccessToken = null;
+        }
+
         connection.IsDeleted = true;
         connection.Status = 3; // Disconnected
         connection.UpdatedAtUtc = DateTime.UtcNow;

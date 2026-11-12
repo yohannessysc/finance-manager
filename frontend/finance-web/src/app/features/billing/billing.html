@@ -1,0 +1,73 @@
+<section class="billing-page">
+  <header class="page-heading">
+    <span class="eyebrow">SUBSCRIPTION</span>
+    <h1>Plans and billing</h1>
+    <p>Upgrade, change or cancel your plan at any time.</p>
+  </header>
+
+  @if (notice()) {
+    <p class="notice" role="status">{{ notice() }}</p>
+  }
+  @if (error()) {
+    <p class="error-message" role="alert">{{ error() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="state-message" role="status">Loading your plan...</p>
+  } @else if (status(); as current) {
+    @if (hasPaidSubscription()) {
+      <div class="subscription-summary">
+        <div>
+          <strong>{{ plans[current.subscribedPlan!].name }} plan</strong>
+          <span>
+            @if (current.cancelAtPeriodEnd) {
+              Ends {{ current.currentPeriodEndUtc | date: 'mediumDate' }}
+            } @else if (current.subscriptionStatus === 'past_due') {
+              Payment failed. Update your card to keep access.
+            } @else if (current.currentPeriodEndUtc) {
+              Renews {{ current.currentPeriodEndUtc | date: 'mediumDate' }}
+            }
+          </span>
+        </div>
+        <button type="button" class="outline-button" [disabled]="redirecting()" (click)="manage()">
+          Manage billing
+        </button>
+      </div>
+    }
+
+    <div class="plan-grid">
+      @for (card of plans; track card.plan) {
+        <article class="plan-card" [class.current]="current.plan === card.plan">
+          <h2>{{ card.name }}</h2>
+          <p class="price">{{ card.price }}</p>
+          <ul>
+            @for (feature of card.features; track feature) {
+              <li>{{ feature }}</li>
+            }
+          </ul>
+
+          @if (current.plan === card.plan) {
+            <span class="current-label">Current plan</span>
+          } @else if (card.plan === Plan.Free) {
+            <span></span>
+          } @else if (hasPaidSubscription()) {
+            <button type="button" class="outline-button" [disabled]="redirecting()" (click)="manage()">
+              Switch in billing portal
+            </button>
+          } @else {
+            <button
+              type="button"
+              class="primary-button"
+              [disabled]="redirecting() || !current.billingConfigured"
+              (click)="choose(card.plan)"
+            >{{ redirecting() ? 'Opening checkout...' : 'Upgrade to ' + card.name }}</button>
+          }
+        </article>
+      }
+    </div>
+
+    @if (!current.billingConfigured) {
+      <p class="state-message">Payments are not configured on this server yet.</p>
+    }
+  }
+</section>

@@ -6,21 +6,8 @@
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <link rel="preconnect" href="https://cdn.plaid.com">
 </head>
 <body>
   <app-root></app-root>
-  <script>
-    // Load Plaid SDK
-    (function() {
-      if (!window.Plaid) {
-        var s = document.createElement('script');
-        s.type = 'text/javascript';
-        s.src = 'https://cdn.plaid.com/link/v3/stable/plain.js';
-        s.async = true;
-        document.body.appendChild(s);
-      }
-    })();
-  </script>
 </body>
 </html>

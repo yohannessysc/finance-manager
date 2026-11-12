@@ -44,6 +44,9 @@ public class BankConnection
     /// <summary>Last successful sync</summary>
     public DateTime? LastSyncAtUtc { get; set; }
 
+    /// <summary>Plaid /transactions/sync cursor; null means sync from the beginning</summary>
+    public string? TransactionsCursor { get; set; }
+
     /// <summary>When the connection will expire (Plaid links expire annually)</summary>
     public DateTime? ExpiresAtUtc { get; set; }
 

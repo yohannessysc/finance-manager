@@ -1,4 +1,5 @@
 
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.RateLimiting;
 
 using FinanceManager.Application.Interfaces;
@@ -6,12 +7,16 @@ using FinanceManager.Application.Services;
 using FinanceManager.Api.BackgroundServices;
 using FinanceManager.Api.Filters;
 
+using FinanceManager.Domain.Enums;
+using FinanceManager.Infrastructure.Billing;
 using FinanceManager.Infrastructure.Identity;
 using FinanceManager.Infrastructure.Persistence;
 using FinanceManager.Infrastructure.Repositories;
+using FinanceManager.Infrastructure.Security;
 using FinanceManager.Infrastructure.Services;
 
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -33,6 +38,35 @@ builder.Services.AddDbContext<FinanceDbContext>(options =>
         builder.Configuration.GetConnectionString(
             "DefaultConnection"));
 });
+
+// ---------------------------------------
+// 2b. Data Protection
+// ---------------------------------------
+// Keys live in the database so every instance shares them and auth
+// cookies, CSRF tokens and encrypted bank tokens survive restarts.
+// Outside development the keys themselves must be encrypted with a
+// certificate kept outside the database, or a database leak would
+// expose the bank tokens too.
+var dataProtection = builder.Services
+    .AddDataProtection()
+    .SetApplicationName("FinanceManager")
+    .PersistKeysToDbContext<FinanceDbContext>();
+
+var keyCertificatePath = builder.Configuration["DataProtection:CertificatePath"];
+if (!string.IsNullOrWhiteSpace(keyCertificatePath))
+{
+    dataProtection.ProtectKeysWithCertificate(
+        X509CertificateLoader.LoadPkcs12FromFile(
+            keyCertificatePath,
+            builder.Configuration["DataProtection:CertificatePassword"]));
+}
+else if (!builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException(
+        "DataProtection:CertificatePath must be configured outside development.");
+}
+
+builder.Services.AddSingleton<IBankTokenProtector, BankTokenProtector>();
 
 // ---------------------------------------
 // 3. ASP.NET Core Identity
@@ -96,7 +130,9 @@ builder.Services.ConfigureApplicationCookie(options =>
             : CookieSecurePolicy.Always;
 
     options.ExpireTimeSpan = UserSessionService.Lifetime;
-    options.SlidingExpiration = false;
+    // Cookie slides with activity; the server-side session enforces
+    // the idle timeout and the absolute cap (UserSessionService).
+    options.SlidingExpiration = true;
 
     // Keep Identity's security-stamp validation, then also require
     // an active server-side session that matches the cookie.
@@ -354,6 +390,10 @@ builder.Services.AddScoped<
     SavingsGoalService>();
 
 builder.Services.AddScoped<
+    ISavingsGoalAutomationService,
+    SavingsGoalAutomationService>();
+
+builder.Services.AddScoped<
     IHouseholdAuthorizationService,
     HouseholdAuthorizationService>();
 
@@ -366,6 +406,25 @@ builder.Services.AddScoped<DefaultCategorySeeder>();
 
 // Server-side login sessions
 builder.Services.AddScoped<UserSessionService>();
+
+// Billing (Stripe) and plan entitlements
+builder.Services.Configure<BillingOptions>(
+    builder.Configuration.GetSection(BillingOptions.SectionName));
+
+var defaultPlan = builder.Configuration
+    .GetSection(BillingOptions.SectionName)
+    .GetValue<SubscriptionPlan?>(nameof(BillingOptions.DefaultPlan));
+if (defaultPlan is not (null or SubscriptionPlan.Free) &&
+    !builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException(
+        "Billing:DefaultPlan gives every user paid features and is only allowed in development.");
+}
+
+builder.Services.AddSingleton<IStripeGateway, StripeGateway>();
+builder.Services.AddScoped<BillingService>();
+builder.Services.AddScoped<IBillingService>(x => x.GetRequiredService<BillingService>());
+builder.Services.AddScoped<IEntitlementService>(x => x.GetRequiredService<BillingService>());
 
 // Bank integration services
 builder.Services.Configure<FinanceManager.Infrastructure.Services.Plaid.PlaidOptions>(
@@ -392,6 +451,12 @@ builder.Services.AddHttpClient<
 builder.Services.AddHostedService<
     RecurringPostingBackgroundService>();
 
+builder.Services.AddHostedService<
+    FinanceManager.Api.BackgroundServices.BankSyncBackgroundService>();
+
+builder.Services.AddHostedService<
+    SavingsGoalBackgroundService>();
+
 // ---------------------------------------
 // 12. Authorization
 // ---------------------------------------
@@ -401,6 +466,8 @@ builder.Services.AddAuthorization();
 // 13. Build Application
 // ---------------------------------------
 var app = builder.Build();
+
+await BankTokenEncryptionBackfill.RunAsync(app.Services);
 
 // ---------------------------------------
 // 14. Middleware Pipeline

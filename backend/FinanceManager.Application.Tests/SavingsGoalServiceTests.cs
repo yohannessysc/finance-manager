@@ -46,7 +46,7 @@ public sealed class SavingsGoalServiceTests : IDisposable
         });
 
         _db.SaveChanges();
-        _service = new SavingsGoalService(_db);
+        _service = new SavingsGoalService(_db, new HouseholdAuthorizationService(_db));
     }
 
     public void Dispose()
@@ -120,7 +120,7 @@ public sealed class SavingsGoalServiceTests : IDisposable
         _db.FinancialAccounts.Add(otherAccount);
         await _db.SaveChangesAsync();
 
-        var otherService = new SavingsGoalService(_db);
+        var otherService = new SavingsGoalService(_db, new HouseholdAuthorizationService(_db));
         var goal = await otherService.CreateAsync(
             otherUserId,
             new SavingsGoalUpsertRequest(

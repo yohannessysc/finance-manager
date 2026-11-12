@@ -23,4 +23,10 @@ public interface IEmailService
         string householdName,
         string invitationUrl,
         CancellationToken ct = default);
+
+    Task SendSavingsGoalMilestoneAsync(
+        string email,
+        string goalName,
+        int milestonePercent,
+        CancellationToken ct = default);
 }

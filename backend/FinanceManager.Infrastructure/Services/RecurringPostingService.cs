@@ -54,6 +54,7 @@ public class RecurringPostingService : IRecurringPostingService
                     FROM "RecurringTransactions"
                     WHERE "Status" = {(int)RecurringStatus.Active}
                       AND "NextOccurrenceUtc" <= {nowUtc}
+                      AND "ExternalStreamId" IS NULL
                     ORDER BY "NextOccurrenceUtc", "Id"
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED

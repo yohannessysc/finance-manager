@@ -6,4 +6,7 @@ public sealed record SavingsGoalContributionResponse(
     decimal Amount,
     DateTime ContributionDateUtc,
     string? Note,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    Guid ContributorUserId,
+    string? ContributorEmail,
+    bool IsScheduled);

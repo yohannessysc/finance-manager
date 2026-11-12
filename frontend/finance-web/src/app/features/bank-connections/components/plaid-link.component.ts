@@ -1,17 +1,16 @@
 import {
   Component,
-  OnInit,
   OnDestroy,
+  Output,
+  EventEmitter,
   signal,
   effect,
   inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpClientModule } from '@angular/common/http';
-import { Subject } from 'rxjs';
+import { Subject, firstValueFrom } from 'rxjs';
 import {
   BankConnectionService,
-  PlaidLinkTokenResponse,
   BankConnectionResponse,
   ExchangePlaidTokenRequest
 } from '../services/bank-connection.service';
@@ -19,12 +18,12 @@ import { AuthService } from '../../../core/auth/auth.service';
 
 /**
  * Plaid Link component for connecting bank accounts
- * Handles the complete flow: get link token → open Plaid Link modal → exchange token
+ * Flow: get link token -> open Plaid Link modal -> exchange public token on success
  */
 @Component({
   selector: 'app-plaid-link',
   standalone: true,
-  imports: [CommonModule, HttpClientModule],
+  imports: [CommonModule],
   template: `
     <div class="plaid-link-container">
       <button 
@@ -41,9 +40,6 @@ import { AuthService } from '../../../core/auth/auth.service';
       <div *ngIf="successMessage()" class="success-message">
         {{ successMessage() }}
       </div>
-
-      <!-- Hidden div where Plaid Link will render -->
-      <div #plaidLinkContainer></div>
     </div>
   `,
   styles: [`
@@ -97,220 +93,155 @@ import { AuthService } from '../../../core/auth/auth.service';
       border-radius: 4px;
       font-size: 0.9rem;
     }
+  `]
 })
-export class PlaidLinkComponent implements OnInit, OnDestroy {
-  // Signal state management
+export class PlaidLinkComponent implements OnDestroy {
+  /** Emitted after a bank connection is saved, so the parent can refresh its list */
+  @Output() connected = new EventEmitter<BankConnectionResponse>();
+
   isLoading = signal(false);
   error = signal<string | null>(null);
   successMessage = signal<string | null>(null);
 
   private destroy$ = new Subject<void>();
-  private linkToken: string | null = null;
-  private plaidScriptLoaded = false;
+  private handler: any = null;
 
   private bankConnectionService = inject(BankConnectionService);
   private authService = inject(AuthService);
 
   constructor() {
-    // Auto-clear error after 5 seconds
-    effect(() => {
-      const errorMsg = this.error();
-      if (errorMsg) {
-        const timeout = setTimeout(() => this.error.set(null), 5000);
-        return () => clearTimeout(timeout);
+    effect((onCleanup) => {
+      if (this.error()) {
+        const t = setTimeout(() => this.error.set(null), 8000);
+        onCleanup(() => clearTimeout(t));
       }
-      return undefined;
     });
 
-    // Auto-clear success message after 3 seconds
-    effect(() => {
-      const successMsg = this.successMessage();
-      if (successMsg) {
-        const timeout = setTimeout(() => this.successMessage.set(null), 3000);
-        return () => clearTimeout(timeout);
+    effect((onCleanup) => {
+      if (this.successMessage()) {
+        const t = setTimeout(() => this.successMessage.set(null), 10000);
+        onCleanup(() => clearTimeout(t));
       }
-      return undefined;
     });
-  }
-
-  ngOnInit(): void {
-    this.ensurePlaidLoaded();
   }
 
   ngOnDestroy(): void {
+    this.handler?.destroy?.();
     this.destroy$.next();
     this.destroy$.complete();
   }
 
-  /**
-   * Ensure Plaid SDK is loaded
-   */
-  private ensurePlaidLoaded(): void {
-    if (this.plaidScriptLoaded || (window as any).Plaid) {
-      this.plaidScriptLoaded = true;
-      return;
-    }
-
-    // Create and append script dynamically
-    const script = document.createElement('script');
-    script.src = 'https://cdn.plaid.com/link/v3/stable/plain.js';
-    script.type = 'text/javascript';
-    script.async = true;
-    
-    script.onload = () => {
-      this.plaidScriptLoaded = true;
-      console.log('Plaid SDK loaded successfully');
-    };
-
-    script.onerror = () => {
-      console.error('Failed to load Plaid SDK');
-      // Don't show error yet - might load when user clicks button
-    };
-
-    // Try appending to head first, then body as fallback
-    try {
-      document.head.appendChild(script);
-    } catch {
-      document.body.appendChild(script);
-    }
-  }
-
-  /**
-   * Open Plaid Link modal
-   */
   async openPlaidLink(): Promise<void> {
+    this.error.set(null);
+    this.successMessage.set(null);
+    this.isLoading.set(true);
+
     try {
-      this.error.set(null);
-      this.successMessage.set(null);
-      this.isLoading.set(true);
-
-      // Ensure Plaid is loaded
-      if (!this.plaidScriptLoaded) {
-        this.ensurePlaidLoaded();
-        // Wait a bit for script to load
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      const plaid = (window as any).Plaid;
-      if (!plaid) {
-        throw new Error('Plaid SDK failed to load. Please check your connection and try again.');
-      }
-
       const currentUser = this.authService.currentUser();
       if (!currentUser?.email) {
         throw new Error('User not authenticated');
       }
 
-      // Step 1: Get link token from backend
-      const linkTokenResponse = await this.bankConnectionService
-        .createLinkToken({
-          userEmail: currentUser.email,
-          userFullName: currentUser.email.split('@')[0]
-        })
-        .toPromise();
+      // Load SDK and fetch link token in parallel
+      const [Plaid, linkTokenResponse] = await Promise.all([
+        loadPlaidSdk(),
+        firstValueFrom(
+          this.bankConnectionService.createLinkToken({
+            userEmail: currentUser.email,
+            userFullName: currentUser.email.split('@')[0]
+          })
+        )
+      ]);
 
       if (!linkTokenResponse?.linkToken) {
         throw new Error('Failed to get link token');
       }
 
-      this.linkToken = linkTokenResponse.linkToken;
-      this.isLoading.set(false);
-
-      // Step 2: Open Plaid Link with the token
-      this.openPlaidLinkModal();
-    } catch (err) {
-      this.error.set(
-        err instanceof Error ? err.message : 'Failed to initialize bank linking'
-      );
+      this.handler?.destroy?.();
+      this.handler = Plaid.create({
+        token: linkTokenResponse.linkToken,
+        onSuccess: (publicToken: string, metadata: any) =>
+          this.handlePlaidSuccess(publicToken, metadata),
+        onExit: (err: any) => {
+          this.isLoading.set(false);
+          if (err) {
+            this.error.set(`Bank linking failed: ${err.display_message || err.error_message}`);
+          }
+        }
+      });
+      this.handler.open();
+    } catch (err: any) {
+      const msg =
+        err?.error?.details || err?.error?.error || err?.message || 'Failed to initialize bank linking';
+      console.error('openPlaidLink error:', err);
+      this.error.set(msg);
       this.isLoading.set(false);
     }
   }
 
-  /**
-   * Open Plaid Link modal using Plaid SDK from index.html
-   */
-  private openPlaidLinkModal(): void {
-    if (!this.linkToken) {
-      this.error.set('No link token available');
-      return;
-    }
-
-    const plaid = (window as any).Plaid;
-    if (!plaid) {
-      this.error.set('Plaid SDK not loaded. Please refresh the page.');
-      return;
-    }
-
-    // Create Plaid Link handler
-    const handler = plaid.create({
-      token: this.linkToken,
-      onSuccess: (publicToken: string, metadata: any) => {
-        this.handlePlaidSuccess(publicToken, metadata);
-      },
-      onExit: (err: any, metadata: any) => {
-        this.handlePlaidExit(err, metadata);
-      },
-      onEvent: (eventName: string, metadata: any) => {
-        console.log('Plaid event:', eventName, metadata);
-      }
-    });
-
-    // Open the Link modal
-    handler.open();
-  }
-
-  /**
-   * Handle successful Plaid Link completion
-   */
-  private handlePlaidSuccess(publicToken: string, metadata: any): void {
+  private async handlePlaidSuccess(publicToken: string, metadata: any): Promise<void> {
     this.isLoading.set(true);
-    this.error.set(null);
+    const request: ExchangePlaidTokenRequest = {
+      publicToken,
+      metadata: {
+        institutionId: metadata?.institution?.institution_id,
+        institutionName: metadata?.institution?.name
+      }
+    };
 
     try {
-      const exchangeRequest: ExchangePlaidTokenRequest = {
-        publicToken,
-        metadata: {
-          institutionId: metadata.institution?.institution_id,
-          institutionName: metadata.institution?.name
-        },
-        financialAccountId: undefined
-      };
+      const connection = await firstValueFrom(
+        this.bankConnectionService.exchangePublicToken(request)
+      );
 
-      // Step 3: Exchange public token for access token
-      this.bankConnectionService
-        .exchangePublicToken(exchangeRequest)
-        .pipe()
-        .subscribe({
-          next: (connection: BankConnectionResponse) => {
-            this.isLoading.set(false);
-            this.successMessage.set(
-              `✅ Successfully connected to ${connection.institutionName}!`
-            );
-            console.log('Bank connection established:', connection);
-            // You can emit an event here to refresh connections list
-          },
-          error: (err) => {
-            this.isLoading.set(false);
-            this.error.set(
-              err.error?.error || 'Failed to complete bank connection'
-            );
-            console.error('Error exchanging token:', err);
-          }
-        });
-    } catch (err) {
+      // The backend runs a first sync on connect. Right after linking, Plaid may
+      // still be pulling history, so retry a few times before giving up quietly.
+      let imported = connection.transactionCount ?? 0;
+      for (let attempt = 0; imported === 0 && attempt < 6; attempt++) {
+        this.successMessage.set(`Connected to ${connection.institutionName}. Importing transactions…`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        const sync = await firstValueFrom(this.bankConnectionService.syncConnection(connection.id));
+        imported += sync.transactionsImported;
+        // 'Pending' = Plaid still preparing history; anything else is final
+        if (sync.status !== 'Pending') break;
+      }
+
+      this.successMessage.set(
+        imported > 0
+          ? `✅ Connected to ${connection.institutionName} — imported ${imported} transactions into your accounts.`
+          : `✅ Connected to ${connection.institutionName}. Transactions will appear shortly.`
+      );
+      this.connected.emit({ ...connection, transactionCount: imported });
+    } catch (err: any) {
+      console.error('Error exchanging token:', err);
+      this.error.set(err?.error?.error || 'Failed to complete bank connection');
+    } finally {
       this.isLoading.set(false);
-      this.error.set('Error processing bank connection');
-      console.error('Error:', err);
     }
   }
+}
 
-  /**
-   * Handle Plaid Link exit (user cancelled or error)
-   */
-  private handlePlaidExit(err: any, metadata: any): void {
-    if (err) {
-      this.error.set(`Bank linking cancelled: ${err.error_message}`);
-    }
-    this.isLoading.set(false);
-  }
+const PLAID_SDK_URL = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+let plaidSdkPromise: Promise<any> | null = null;
+
+/** Loads Plaid Link SDK once and resolves with window.Plaid */
+export function loadPlaidSdk(): Promise<any> {
+  const w = window as any;
+  if (w.Plaid) return Promise.resolve(w.Plaid);
+  if (plaidSdkPromise) return plaidSdkPromise;
+
+  plaidSdkPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = PLAID_SDK_URL;
+    script.async = true;
+    script.onload = () =>
+      w.Plaid ? resolve(w.Plaid) : reject(new Error('Plaid SDK loaded but window.Plaid is missing'));
+    script.onerror = () => {
+      plaidSdkPromise = null;
+      script.remove();
+      reject(new Error('Could not load Plaid. Check your connection or disable ad/tracker blockers for this site.'));
+    };
+    document.head.appendChild(script);
+  });
+  return plaidSdkPromise;
 }

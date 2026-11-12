@@ -17,7 +17,7 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.13")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -83,6 +83,10 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<string>("TransactionsCursor")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -111,9 +115,6 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("BankConnectionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("BankConnectionId1")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("CompletedAtUtc")
@@ -156,8 +157,6 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("BankConnectionId");
 
-                    b.HasIndex("BankConnectionId1");
-
                     b.HasIndex("StartedAtUtc");
 
                     b.HasIndex("Status");
@@ -190,9 +189,6 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("BankConnectionId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("BankConnectionId1")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("BankTransactionId")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -209,9 +205,6 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(500)");
 
                     b.Property<Guid?>("FinancialTransactionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("FinancialTransactionId1")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("ImportedAtUtc")
@@ -240,11 +233,7 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("BankConnectionId");
 
-                    b.HasIndex("BankConnectionId1");
-
                     b.HasIndex("FinancialTransactionId");
-
-                    b.HasIndex("FinancialTransactionId1");
 
                     b.HasIndex("Status");
 
@@ -330,6 +319,9 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<Guid?>("BankConnectionId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -338,8 +330,16 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)");
 
+                    b.Property<string>("ExternalAccountId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<Guid?>("HouseholdId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Mask")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -358,6 +358,10 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.HasIndex("HouseholdId");
 
                     b.HasIndex("UserId");
+
+                    b.HasIndex("BankConnectionId", "ExternalAccountId")
+                        .IsUnique()
+                        .HasFilter("\"ExternalAccountId\" IS NOT NULL");
 
                     b.ToTable("FinancialAccounts", (string)null);
                 });
@@ -601,6 +605,10 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("EndDateUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ExternalStreamId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<Guid>("FinancialAccountId")
                         .HasColumnType("uuid");
 
@@ -637,6 +645,10 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("FinancialAccountId");
 
+                    b.HasIndex("UserId", "ExternalStreamId")
+                        .IsUnique()
+                        .HasFilter("\"ExternalStreamId\" IS NOT NULL");
+
                     b.HasIndex("UserId", "Status", "NextOccurrenceUtc");
 
                     b.ToTable("RecurringTransactions", (string)null);
@@ -648,6 +660,16 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("AutoContributionAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int?>("AutoContributionFrequency")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("AutoContributionStartUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -656,10 +678,31 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)");
 
+                    b.Property<int?>("EmergencyFundMonths")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GoalType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("LastMilestoneNotified")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("LinkedAccountId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime?>("NextAutoContributionUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("NotificationsEnabled")
+                        .HasColumnType("boolean");
 
                     b.Property<decimal>("TargetAmount")
                         .HasPrecision(18, 2)
@@ -675,6 +718,13 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.HasIndex("LinkedAccountId")
+                        .IsUnique();
+
+                    b.HasIndex("NextAutoContributionUtc");
 
                     b.HasIndex("UserId", "CreatedAtUtc");
 
@@ -704,12 +754,16 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("SavingsGoalId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("ScheduledOccurrenceUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SavingsGoalId");
+                    b.HasIndex("SavingsGoalId", "ScheduledOccurrenceUtc")
+                        .IsUnique();
 
                     b.HasIndex("UserId", "SavingsGoalId", "ContributionDateUtc");
 
@@ -742,6 +796,44 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("TransactionCategories", (string)null);
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.UserSubscription", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("CancelAtPeriodEnd")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("CurrentPeriodEndUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Plan")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("StripeCustomerId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("StripeSubscriptionId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("StripeCustomerId")
+                        .IsUnique();
+
+                    b.ToTable("UserSubscriptions", (string)null);
                 });
 
             modelBuilder.Entity("FinanceManager.Infrastructure.Identity.ApplicationUser", b =>
@@ -906,6 +998,25 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.ToTable("UserSessions", (string)null);
                 });
 
+            modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("FriendlyName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Xml")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("DataProtectionKeys");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1052,40 +1163,27 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FinanceManager.Domain.Entities.BankSyncLog", b =>
                 {
-                    b.HasOne("FinanceManager.Domain.Entities.BankConnection", null)
+                    b.HasOne("FinanceManager.Domain.Entities.BankConnection", "BankConnection")
                         .WithMany("SyncLogs")
                         .HasForeignKey("BankConnectionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.HasOne("FinanceManager.Domain.Entities.BankConnection", "BankConnection")
-                        .WithMany()
-                        .HasForeignKey("BankConnectionId1");
 
                     b.Navigation("BankConnection");
                 });
 
             modelBuilder.Entity("FinanceManager.Domain.Entities.BankTransaction", b =>
                 {
-                    b.HasOne("FinanceManager.Domain.Entities.BankConnection", null)
+                    b.HasOne("FinanceManager.Domain.Entities.BankConnection", "BankConnection")
                         .WithMany("BankTransactions")
                         .HasForeignKey("BankConnectionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("FinanceManager.Domain.Entities.BankConnection", "BankConnection")
-                        .WithMany()
-                        .HasForeignKey("BankConnectionId1");
-
-                    b.HasOne("FinanceManager.Domain.Entities.FinancialTransaction", null)
+                    b.HasOne("FinanceManager.Domain.Entities.FinancialTransaction", "FinancialTransaction")
                         .WithMany()
                         .HasForeignKey("FinancialTransactionId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("FinanceManager.Domain.Entities.FinancialTransaction", "FinancialTransaction")
-                        .WithMany()
-                        .HasForeignKey("FinancialTransactionId1")
-                        .HasConstraintName("FK_BankTransactions_FinancialTransactions_FinancialTransactio~1");
 
                     b.Navigation("BankConnection");
 
@@ -1237,6 +1335,16 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("FinanceManager.Domain.Entities.SavingsGoal", b =>
                 {
+                    b.HasOne("FinanceManager.Domain.Entities.Household", null)
+                        .WithMany()
+                        .HasForeignKey("HouseholdId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("FinanceManager.Domain.Entities.FinancialAccount", null)
+                        .WithMany()
+                        .HasForeignKey("LinkedAccountId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -1265,6 +1373,15 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.UserSubscription", b =>
+                {
+                    b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

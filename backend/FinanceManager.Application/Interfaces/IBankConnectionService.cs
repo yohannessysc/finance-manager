@@ -16,6 +16,19 @@ public interface IBankConnectionService
         CreatePlaidLinkRequest request);
 
     /// <summary>
+    /// Create a Plaid Link token in update mode so the user can log in to
+    /// their bank again. Null when the connection is not the user's.
+    /// </summary>
+    Task<PlaidLinkTokenResponse?> CreateReconnectLinkTokenAsync(
+        Guid connectionId,
+        Guid userId);
+
+    /// <summary>
+    /// Mark a connection healthy again after the user re-authenticated.
+    /// </summary>
+    Task<bool> MarkReconnectedAsync(Guid connectionId, Guid userId);
+
+    /// <summary>
     /// Exchange Plaid public token for access token and store connection
     /// </summary>
     Task<BankConnectionResponse> ExchangePlaidTokenAsync(

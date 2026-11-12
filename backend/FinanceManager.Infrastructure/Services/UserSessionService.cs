@@ -13,6 +13,11 @@ public sealed class UserSessionService
     public static readonly TimeSpan Lifetime =
         TimeSpan.FromMinutes(30);
 
+    // Sessions slide on activity (idle timeout = Lifetime) but can never
+    // outlive this absolute cap from the original login.
+    public static readonly TimeSpan AbsoluteLifetime =
+        TimeSpan.FromHours(12);
+
     // Activity is written at most this often per session.
     private static readonly TimeSpan TouchInterval =
         TimeSpan.FromMinutes(5);
@@ -71,7 +76,8 @@ public sealed class UserSessionService
             {
                 x.RevokedAtUtc,
                 x.ExpiresAtUtc,
-                x.LastSeenAtUtc
+                x.LastSeenAtUtc,
+                x.CreatedAtUtc
             })
             .SingleOrDefaultAsync(ct);
 
@@ -106,10 +112,17 @@ public sealed class UserSessionService
 
         if (now - session.LastSeenAtUtc >= TouchInterval)
         {
+            // Sliding idle timeout, capped by the absolute lifetime.
+            var absoluteEnd = session.CreatedAtUtc + AbsoluteLifetime;
+            var newExpiry = now + Lifetime;
+            if (newExpiry > absoluteEnd) newExpiry = absoluteEnd;
+
             await _db.UserSessions
                 .Where(x => x.Id == sessionId)
                 .ExecuteUpdateAsync(
-                    s => s.SetProperty(x => x.LastSeenAtUtc, now),
+                    s => s
+                        .SetProperty(x => x.LastSeenAtUtc, now)
+                        .SetProperty(x => x.ExpiresAtUtc, newExpiry),
                     ct);
         }
 

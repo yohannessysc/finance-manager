@@ -1,5 +1,7 @@
+using FinanceManager.Api.Filters;
 using FinanceManager.Application.DTOs.Bank;
 using FinanceManager.Application.Interfaces;
+using FinanceManager.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -12,6 +14,7 @@ namespace FinanceManager.Api.Controllers;
 [ApiController]
 [Route("api/v1/bank")]
 [Authorize]
+[ServiceFilter(typeof(ValidateCsrfTokenFilter))]
 public class BankConnectionsController : ControllerBase
 {
     private readonly IBankConnectionService _bankConnectionService;
@@ -36,6 +39,7 @@ public class BankConnectionsController : ControllerBase
     /// After user selects account, exchange the public token for access token.
     /// </remarks>
     [HttpPost("plaid/link-token")]
+    [RequiresPlan(SubscriptionPlan.Bank)]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(PlaidLinkTokenResponse))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -76,6 +80,7 @@ public class BankConnectionsController : ControllerBase
     /// The public token is only valid for 30 minutes.
     /// </remarks>
     [HttpPost("plaid/exchange-token")]
+    [RequiresPlan(SubscriptionPlan.Bank)]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(BankConnectionResponse))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -108,6 +113,12 @@ public class BankConnectionsController : ControllerBase
                 "Successfully connected bank account for user {UserId}, connection {ConnectionId}",
                 parsedUserId,
                 response.Id);
+
+            // First sync right away so accounts and transactions appear immediately.
+            // If Plaid is still preparing history, the UI retries via the sync endpoint
+            // and the background sync picks it up anyway.
+            var syncLog = await _bankSyncService.SyncTransactionsAsync(response.Id);
+            response.TransactionCount = syncLog.TransactionsImported;
 
             return Ok(response);
         }
@@ -261,6 +272,7 @@ public class BankConnectionsController : ControllerBase
     /// This endpoint allows on-demand sync.
     /// </remarks>
     [HttpPost("connections/{connectionId}/sync")]
+    [RequiresPlan(SubscriptionPlan.Bank)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -298,7 +310,12 @@ public class BankConnectionsController : ControllerBase
                 duplicatesSkipped = syncLog.DuplicatesSkipped,
                 errorCount = syncLog.ErrorCount,
                 completedAt = syncLog.CompletedAtUtc,
-                message = "Sync completed"
+                message = syncLog.Status switch
+                {
+                    "Pending" => "Your bank is still preparing transaction history. Try again in a moment.",
+                    "Failed" => syncLog.ErrorMessage ?? "Sync failed",
+                    _ => "Sync completed"
+                }
             });
         }
         catch (Exception ex)
@@ -306,5 +323,51 @@ public class BankConnectionsController : ControllerBase
             _logger.LogError(ex, "Failed to sync connection {ConnectionId} for user {UserId}", connectionId, parsedUserId);
             return BadRequest(new { error = "Failed to sync connection", details = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Get a Plaid Link token in update mode for a connection whose bank
+    /// login expired (status ExpiredLink).
+    /// </summary>
+    [HttpPost("connections/{connectionId}/reconnect-token")]
+    [RequiresPlan(SubscriptionPlan.Bank)]
+    public async Task<ActionResult<PlaidLinkTokenResponse>> CreateReconnectToken(Guid connectionId)
+    {
+        if (!Guid.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
+            return Unauthorized("Invalid user");
+
+        try
+        {
+            var token = await _bankConnectionService.CreateReconnectLinkTokenAsync(connectionId, userId);
+            return token is null ? NotFound() : Ok(token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create reconnect token for connection {ConnectionId}", connectionId);
+            return BadRequest(new { error = "Failed to start reconnecting this bank." });
+        }
+    }
+
+    /// <summary>
+    /// Called after Plaid Link update mode succeeds: marks the connection
+    /// healthy and syncs right away.
+    /// </summary>
+    [HttpPost("connections/{connectionId}/reconnected")]
+    [RequiresPlan(SubscriptionPlan.Bank)]
+    public async Task<IActionResult> MarkReconnected(Guid connectionId)
+    {
+        if (!Guid.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
+            return Unauthorized("Invalid user");
+
+        if (!await _bankConnectionService.MarkReconnectedAsync(connectionId, userId))
+            return NotFound();
+
+        var syncLog = await _bankSyncService.SyncTransactionsAsync(connectionId);
+        return Ok(new
+        {
+            syncId = syncLog.Id,
+            status = syncLog.Status,
+            transactionsImported = syncLog.TransactionsImported
+        });
     }
 }

@@ -121,6 +121,26 @@ export class BankConnectionService {
   }
 
   /**
+   * Get a Plaid Link token in update mode to re-authenticate an expired connection
+   */
+  createReconnectToken(connectionId: string): Observable<PlaidLinkTokenResponse> {
+    return this.http.post<PlaidLinkTokenResponse>(
+      `${this.apiUrl}/connections/${connectionId}/reconnect-token`,
+      {}
+    );
+  }
+
+  /**
+   * Tell the API re-authentication succeeded; it marks the connection healthy and syncs
+   */
+  markReconnected(connectionId: string): Observable<BankSyncResponse> {
+    return this.http.post<BankSyncResponse>(
+      `${this.apiUrl}/connections/${connectionId}/reconnected`,
+      {}
+    );
+  }
+
+  /**
    * Manually trigger a sync for a connection
    */
   syncConnection(connectionId: string): Observable<BankSyncResponse> {

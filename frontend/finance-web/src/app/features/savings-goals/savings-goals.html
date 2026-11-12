@@ -3,7 +3,7 @@
     <div>
       <span class="eyebrow">FINANCIAL TARGETS</span>
       <h1>Savings goals</h1>
-      <p>Set targets and record contributions. Goal contributions track progress and do not change account balances.</p>
+      <p>Track goals by recording contributions, scheduling them, or linking a savings account so progress follows its balance.</p>
     </div>
     <button type="button" class="outline-button" (click)="load()">Refresh</button>
   </header>
@@ -28,7 +28,17 @@
                 <h3>{{ goal.name }}</h3>
                 <p>{{ goal.targetDateUtc ? 'Target date ' + (goal.targetDateUtc | date: 'mediumDate' : 'UTC') : 'No target date' }}</p>
               </div>
-              <span class="currency-badge">{{ goal.currency }}</span>
+              <div class="goal-badges">
+                <span
+                  class="status-badge"
+                  [class.behind]="goal.status === GoalStatus.Behind"
+                  [class.done]="goal.status === GoalStatus.Completed"
+                >{{ statusLabel(goal.status) }}</span>
+                @if (goal.householdId) {
+                  <span class="scope-badge">{{ householdName(goal.householdId) }}</span>
+                }
+                <span class="currency-badge">{{ goal.currency }}</span>
+              </div>
             </header>
             <div class="goal-values">
               <strong>{{ goal.amountSaved | currency: goal.currency : 'symbol' : '1.2-2' }}</strong>
@@ -49,50 +59,134 @@
               <strong>{{ goal.remaining | currency: goal.currency : 'symbol' : '1.2-2' }} remaining</strong>
             </div>
 
+            @if (goal.status !== GoalStatus.Completed) {
+              <dl class="goal-insights">
+                @if (goal.monthlyContributionNeeded !== null) {
+                  <div>
+                    <dt>Needed</dt>
+                    <dd>{{ goal.monthlyContributionNeeded | currency: goal.currency : 'symbol' : '1.0-0' }}/month</dd>
+                  </div>
+                }
+                <div>
+                  <dt>Your pace</dt>
+                  <dd>{{ goal.monthlyPace | currency: goal.currency : 'symbol' : '1.0-0' }}/month</dd>
+                </div>
+                <div>
+                  <dt>Projected</dt>
+                  <dd>{{ goal.projectedCompletionDateUtc ? (goal.projectedCompletionDateUtc | date: 'MMM y') : 'Start saving to project' }}</dd>
+                </div>
+              </dl>
+            }
+
+            <ul class="goal-details">
+              @if (goal.goalType === GoalType.EmergencyFund) {
+                <li>
+                  Emergency fund:
+                  @if (goal.averageMonthlyExpenses) {
+                    {{ goal.emergencyFundMonths }} months × {{ goal.averageMonthlyExpenses | currency: goal.currency : 'symbol' : '1.0-0' }} average spending
+                  } @else {
+                    {{ goal.emergencyFundMonths }} months of expenses. Using your entered target until there is spending history.
+                  }
+                </li>
+              }
+              @if (goal.linkedAccountName) {
+                <li>Tracks the balance of {{ goal.linkedAccountName }}</li>
+              }
+              @if (goal.autoContributionAmount !== null) {
+                <li>
+                  {{ goal.autoContributionAmount | currency: goal.currency : 'symbol' : '1.2-2' }}
+                  {{ frequencyLabel(goal.autoContributionFrequency).toLowerCase() }}
+                  @if (goal.nextAutoContributionUtc) {
+                    · next {{ goal.nextAutoContributionUtc | date: 'mediumDate' }}
+                  } @else {
+                    · finished
+                  }
+                </li>
+              }
+            </ul>
+
             @if (selectedGoalId() === goal.id) {
               <div class="contributions">
-                <h4>Contributions</h4>
-                @for (item of contributions(); track item.id) {
-                  <div class="contribution-row">
-                    <span>{{ item.contributionDateUtc.slice(0, 10) }} · {{ item.note || 'Contribution' }}</span>
-                    <strong>{{ item.amount | currency: goal.currency : 'symbol' : '1.2-2' }}</strong>
-                    <button
-                      type="button"
-                      class="text-button danger-text"
-                      aria-label="Remove contribution"
-                      (click)="removeContribution(goal, item)"
-                    >Remove</button>
-                  </div>
-                } @empty {
-                  <p class="state-message">No contributions recorded.</p>
+                @if (goal.linkedAccountId) {
+                  <p class="state-message">
+                    Progress comes from the linked account's balance. Deposits into that account count automatically.
+                  </p>
+                } @else {
+                  <h4>Contributions</h4>
+
+                  @if (chartPoints()) {
+                    <svg
+                      class="progress-chart"
+                      viewBox="0 0 100 40"
+                      preserveAspectRatio="none"
+                      role="img"
+                      [attr.aria-label]="goal.name + ' savings over time'"
+                    >
+                      <polyline [attr.points]="chartPoints()" vector-effect="non-scaling-stroke" />
+                    </svg>
+                  }
+
+                  @if (goal.householdId && contributions().length) {
+                    <div class="member-totals">
+                      @for (member of memberTotals(); track member.name) {
+                        <span>{{ member.name }}: <strong>{{ member.amount | currency: goal.currency : 'symbol' : '1.2-2' }}</strong></span>
+                      }
+                    </div>
+                  }
+
+                  @for (item of contributions(); track item.id) {
+                    <div class="contribution-row">
+                      <span>
+                        {{ item.contributionDateUtc.slice(0, 10) }} · {{ item.note || 'Contribution' }}
+                        @if (goal.householdId && item.contributorEmail) {
+                          · {{ item.contributorEmail }}
+                        }
+                      </span>
+                      <strong>{{ item.amount | currency: goal.currency : 'symbol' : '1.2-2' }}</strong>
+                      @if (goal.canEdit) {
+                        <button
+                          type="button"
+                          class="text-button danger-text"
+                          aria-label="Remove contribution"
+                          (click)="removeContribution(goal, item)"
+                        >Remove</button>
+                      }
+                    </div>
+                  } @empty {
+                    <p class="state-message">No contributions recorded.</p>
+                  }
+
+                  @if (goal.canEdit) {
+                    <form class="contribution-form" [formGroup]="contributionForm" (ngSubmit)="addContribution(goal)">
+                      <label>
+                        <span>Amount</span>
+                        <input type="number" formControlName="amount" min="0.01" step="0.01" />
+                      </label>
+                      <label>
+                        <span>Date</span>
+                        <input type="date" formControlName="date" />
+                      </label>
+                      <label>
+                        <span>Note (optional)</span>
+                        <input type="text" formControlName="note" maxlength="250" />
+                      </label>
+                      <button type="submit" class="primary-button" [disabled]="saving() || contributionForm.invalid">
+                        {{ saving() ? 'Saving...' : 'Add contribution' }}
+                      </button>
+                    </form>
+                  }
                 }
               </div>
-
-              <form class="contribution-form" [formGroup]="contributionForm" (ngSubmit)="addContribution(goal)">
-                <label>
-                  <span>Amount</span>
-                  <input type="number" formControlName="amount" min="0.01" step="0.01" />
-                </label>
-                <label>
-                  <span>Date</span>
-                  <input type="date" formControlName="date" />
-                </label>
-                <label>
-                  <span>Note (optional)</span>
-                  <input type="text" formControlName="note" maxlength="250" />
-                </label>
-                <button type="submit" class="primary-button" [disabled]="saving() || contributionForm.invalid">
-                  {{ saving() ? 'Saving...' : 'Add contribution' }}
-                </button>
-              </form>
             }
 
             <footer>
               <button type="button" class="text-button" (click)="showContributions(goal)">
                 {{ selectedGoalId() === goal.id ? 'Refresh contributions' : 'Contributions' }}
               </button>
-              <button type="button" class="text-button" (click)="edit(goal)">Edit</button>
-              <button type="button" class="text-button danger-text" (click)="removeGoal(goal)">Delete</button>
+              @if (goal.canEdit) {
+                <button type="button" class="text-button" (click)="edit(goal)">Edit</button>
+                <button type="button" class="text-button danger-text" (click)="removeGoal(goal)">Delete</button>
+              }
             </footer>
           </article>
         } @empty {
@@ -112,6 +206,26 @@
             </label>
 
             @if (!editingId()) {
+              @if (editableHouseholds().length) {
+                <label>
+                  <span>Shared with</span>
+                  <select formControlName="householdId">
+                    <option value="">Only me</option>
+                    @for (household of editableHouseholds(); track household.id) {
+                      <option [value]="household.id">{{ household.name }} (shared)</option>
+                    }
+                  </select>
+                </label>
+              }
+
+              <label>
+                <span>Goal type</span>
+                <select formControlName="goalType">
+                  <option [ngValue]="GoalType.Custom">Custom target</option>
+                  <option [ngValue]="GoalType.EmergencyFund">Emergency fund</option>
+                </select>
+              </label>
+
               <label>
                 <span>Currency</span>
                 <select formControlName="currency">
@@ -122,14 +236,76 @@
               </label>
             }
 
+            @if (goalForm.controls.goalType.value === GoalType.EmergencyFund) {
+              <label>
+                <span>Months of expenses to cover</span>
+                <input type="number" formControlName="emergencyFundMonths" min="1" max="24" step="1" />
+              </label>
+            }
+
             <label>
-              <span>Target amount</span>
+              <span>{{ goalForm.controls.goalType.value === GoalType.EmergencyFund ? 'Fallback target (used until there is spending history)' : 'Target amount' }}</span>
               <input type="number" formControlName="targetAmount" min="0.01" step="0.01" />
             </label>
 
             <label>
               <span>Target date (optional)</span>
               <input type="date" formControlName="targetDate" />
+            </label>
+
+            <label>
+              <span>Track progress by</span>
+              <select formControlName="tracking">
+                <option value="manual">Recording contributions</option>
+                <option value="linked">Linking a savings account</option>
+              </select>
+            </label>
+
+            @if (goalForm.controls.tracking.value === 'linked') {
+              <label>
+                <span>Account</span>
+                <select formControlName="linkedAccountId">
+                  <option value="">Choose an account</option>
+                  @for (account of linkableAccounts(); track account.id) {
+                    <option [value]="account.id">{{ account.name }}</option>
+                  }
+                </select>
+              </label>
+              @if (!linkableAccounts().length) {
+                <p class="hint">No available accounts in this currency and scope. Each account can back one goal.</p>
+              }
+            } @else {
+              <label class="checkbox-label">
+                <input type="checkbox" formControlName="autoEnabled" />
+                <span>Schedule automatic contributions</span>
+              </label>
+
+              @if (goalForm.controls.autoEnabled.value) {
+                <div class="schedule-fields">
+                  <label>
+                    <span>Amount</span>
+                    <input type="number" formControlName="autoAmount" min="0.01" step="0.01" />
+                  </label>
+                  <label>
+                    <span>Every</span>
+                    <select formControlName="autoFrequency">
+                      @for (frequency of frequencies; track frequency.value) {
+                        <option [ngValue]="frequency.value">{{ frequency.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label>
+                    <span>Starting</span>
+                    <input type="date" formControlName="autoStart" />
+                  </label>
+                </div>
+                <p class="hint">Records progress toward the goal on schedule. It does not move money between accounts.</p>
+              }
+            }
+
+            <label class="checkbox-label">
+              <input type="checkbox" formControlName="notificationsEnabled" />
+              <span>Send milestone emails at 25%, 50%, 75% and 100%</span>
             </label>
 
             <div class="form-actions">

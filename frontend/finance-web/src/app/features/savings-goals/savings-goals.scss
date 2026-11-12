@@ -144,10 +144,11 @@ h1 {
   font-weight: 700;
 }
 
-.goal-form-card input,
+.goal-form-card input:not([type='checkbox']),
 .goal-form-card select,
 .contribution-form input {
   width: 100%;
+  min-width: 0;
   min-height: 42px;
   padding: 9px 11px;
   border: 1px solid var(--fm-border);
@@ -361,21 +362,36 @@ h1 {
 .goal-form-card .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  cursor: pointer;
 }
 
 .goal-form-card .checkbox-label input {
-  width: auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.goal-form-card .checkbox-label span {
+  font-weight: 600;
 }
 
 .schedule-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
 }
 
+// Grid items default to min-width: auto, which lets wide native
+// controls (date inputs) push past the column.
+.schedule-fields label,
+.contribution-form label {
+  min-width: 0;
+}
+
 .hint {
-  margin: -6px 0 14px;
+  margin: -8px 0 0;
   color: var(--fm-muted);
   font-size: 12px;
 }

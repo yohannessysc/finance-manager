@@ -12,6 +12,9 @@
   --fm-primary-soft: #e8f6f0;
 
   --fm-shadow: 0 6px 24px rgba(16, 32, 40, .04);
+
+  // Native controls (date pickers, selects, checkboxes) follow the theme.
+  color-scheme: light;
 }
 
 :root[data-theme='dark'] {
@@ -26,6 +29,16 @@
   --fm-primary-soft: #1d3933;
 
   --fm-shadow: 0 6px 24px rgba(0, 0, 0, .15);
+
+  color-scheme: dark;
+}
+
+// Widths include padding and border everywhere, so width: 100% form
+// fields never overflow their container.
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 html,
@@ -54,4 +67,9 @@ input,
 select,
 textarea {
   font-family: inherit;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--fm-primary);
 }

@@ -47,6 +47,7 @@ export const routes: Routes = [
       { path: 'transactions', loadComponent: () => import('./features/transactions/transactions').then(m => m.Transactions) },
       { path: 'recurring', loadComponent: () => import('./features/recurring/recurring').then(m => m.Recurring) },
       { path: 'categories', loadComponent: () => import('./features/categories/categories').then(m => m.Categories) },
+      { path: 'reports', loadComponent: () => import('./features/reports/reports').then(m => m.Reports) },
       { path: 'budgets', loadComponent: () => import('./features/budgets/budgets').then(m => m.Budgets) },
       { path: 'savings-goals', loadComponent: () => import('./features/savings-goals/savings-goals').then(m => m.SavingsGoals) },
       { path: 'households', loadComponent: () => import('./features/households/households').then(m => m.Households) },

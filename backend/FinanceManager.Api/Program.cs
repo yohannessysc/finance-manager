@@ -417,6 +417,10 @@ builder.Services.AddScoped<
     BudgetService>();
 
 builder.Services.AddScoped<
+    IReportService,
+    ReportService>();
+
+builder.Services.AddScoped<
     ISavingsGoalService,
     SavingsGoalService>();
 

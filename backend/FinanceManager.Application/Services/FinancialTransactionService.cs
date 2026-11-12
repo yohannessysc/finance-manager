@@ -23,8 +23,14 @@ public class FinancialTransactionService
     {
         var transactions = await _repository.GetAllAsync(
             userId, ct);
+        var ids = transactions.Select(x => x.Id).ToList();
+        var splits = (await _repository.GetSplitsAsync(ids, ct))
+            .ToLookup(x => x.TransactionId);
+        var attachments = await _repository.GetAttachmentCountsAsync(ids, ct);
 
-        return transactions.Select(MapToResponse).ToList();
+        return transactions
+            .Select(x => MapToResponse(x, splits[x.Id], attachments.GetValueOrDefault(x.Id)))
+            .ToList();
     }
 
     public async Task<TransactionResponse?> GetByIdAsync(
@@ -35,9 +41,12 @@ public class FinancialTransactionService
         var transaction = await _repository.GetByIdAsync(
             id, userId, ct);
 
-        return transaction is null
-            ? null
-            : MapToResponse(transaction);
+        if (transaction is null)
+            return null;
+
+        var splits = await _repository.GetSplitsAsync([transaction.Id], ct);
+        var attachments = await _repository.GetAttachmentCountsAsync([transaction.Id], ct);
+        return MapToResponse(transaction, splits, attachments.GetValueOrDefault(transaction.Id));
     }
 
     public async Task<TransactionResponse> CreateAsync(
@@ -111,6 +120,23 @@ public class FinancialTransactionService
             request.TransactionDateUtc,
             ct);
 
+        var splits = await _repository.GetSplitsAsync([transaction.Id], ct);
+        if (splits.Count > 0)
+        {
+            if (request.CategoryId is not null)
+            {
+                // Choosing a single category replaces the split.
+                await _repository.ReplaceSplitsAsync(transaction.Id, [], ct);
+                splits = [];
+            }
+            else if (request.Amount != transaction.Amount ||
+                     request.Type != transaction.Type)
+            {
+                throw new ArgumentException(
+                    "This transaction is split. Remove the split before changing its amount or type.");
+            }
+        }
+
         transaction.FinancialAccountId =
             request.FinancialAccountId;
 
@@ -127,7 +153,112 @@ public class FinancialTransactionService
 
         await _repository.SaveChangesAsync(ct);
 
-        return MapToResponse(transaction);
+        var attachmentCounts = await _repository.GetAttachmentCountsAsync([transaction.Id], ct);
+        return MapToResponse(transaction, splits, attachmentCounts.GetValueOrDefault(transaction.Id));
+    }
+
+    public async Task<TransactionResponse?> SetSplitsAsync(
+        Guid id,
+        Guid userId,
+        SetSplitsRequest request,
+        CancellationToken ct = default)
+    {
+        if (!await _repository.CanEditTransactionAsync(id, userId, ct))
+            return null;
+
+        var transaction = await _repository.GetByIdAsync(id, userId, ct);
+        if (transaction is null)
+            return null;
+
+        var lines = request.Lines ?? [];
+        var splits = new List<TransactionSplit>();
+
+        if (lines.Count > 0)
+        {
+            if (transaction.Type == TransactionType.Transfer)
+                throw new ArgumentException("Transfers cannot be split across categories.");
+            if (lines.Count < 2)
+                throw new ArgumentException("A split needs at least two lines.");
+            if (lines.Count > MaximumSplitLines)
+                throw new ArgumentException($"A split can have at most {MaximumSplitLines} lines.");
+
+            foreach (var line in lines)
+            {
+                if (line.Amount <= 0 || decimal.Round(line.Amount, 2) != line.Amount)
+                    throw new ArgumentException("Each split amount must be positive with at most two decimal places.");
+                if (line.Note?.Trim().Length > 200)
+                    throw new ArgumentException("Split notes cannot exceed 200 characters.");
+
+                var category = await _repository.GetCategoryAsync(line.CategoryId, userId, ct);
+                if (category is null || category.Type != transaction.Type)
+                    throw new ArgumentException("Each split line needs a category of the transaction's type.");
+
+                splits.Add(new TransactionSplit
+                {
+                    TransactionId = transaction.Id,
+                    CategoryId = line.CategoryId,
+                    Amount = line.Amount,
+                    Note = string.IsNullOrWhiteSpace(line.Note) ? null : line.Note.Trim()
+                });
+            }
+
+            if (splits.Sum(x => x.Amount) != transaction.Amount)
+            {
+                throw new ArgumentException(
+                    $"Split lines must add up to the transaction amount ({transaction.Amount:0.00}).");
+            }
+
+            // The lines carry the categories now.
+            transaction.CategoryId = null;
+        }
+
+        await _repository.ReplaceSplitsAsync(transaction.Id, splits, ct);
+        await _repository.SaveChangesAsync(ct);
+
+        var attachmentCounts = await _repository.GetAttachmentCountsAsync([transaction.Id], ct);
+        return MapToResponse(transaction, splits, attachmentCounts.GetValueOrDefault(transaction.Id));
+    }
+
+    public async Task<BulkCategoryResponse> SetCategoryAsync(
+        Guid userId,
+        BulkCategoryRequest request,
+        CancellationToken ct = default)
+    {
+        var ids = (request.TransactionIds ?? []).Distinct().ToList();
+        if (ids.Count == 0)
+            throw new ArgumentException("Select at least one transaction.");
+        if (ids.Count > MaximumBulkTransactions)
+            throw new ArgumentException($"You can change at most {MaximumBulkTransactions} transactions at once.");
+
+        TransactionCategory? category = null;
+        if (request.CategoryId is { } categoryId)
+        {
+            category = await _repository.GetCategoryAsync(categoryId, userId, ct)
+                ?? throw new ArgumentException("Choose one of your categories.");
+        }
+
+        var updated = 0;
+        var skipped = 0;
+        foreach (var id in ids)
+        {
+            var transaction = await _repository.GetByIdAsync(id, userId, ct);
+            if (transaction is null ||
+                transaction.Type == TransactionType.Transfer ||
+                (category is not null && category.Type != transaction.Type) ||
+                !await _repository.CanEditTransactionAsync(id, userId, ct))
+            {
+                skipped++;
+                continue;
+            }
+
+            // A single category replaces any split, as in the edit form.
+            await _repository.ReplaceSplitsAsync(transaction.Id, [], ct);
+            transaction.CategoryId = category?.Id;
+            updated++;
+        }
+
+        await _repository.SaveChangesAsync(ct);
+        return new BulkCategoryResponse(updated, skipped);
     }
 
     public async Task<bool> DeleteAsync(
@@ -284,9 +415,18 @@ public class FinancialTransactionService
         }
     }
 
+    private const int MaximumSplitLines = 20;
+    private const int MaximumBulkTransactions = 500;
+
     private static TransactionResponse MapToResponse(
-        FinancialTransaction transaction)
+        FinancialTransaction transaction,
+        IEnumerable<TransactionSplit>? splits = null,
+        int attachmentCount = 0)
     {
+        var lines = splits?
+            .Select(x => new TransactionSplitResponse(x.Id, x.CategoryId, x.Amount, x.Note))
+            .ToList();
+
         return new TransactionResponse(
             transaction.Id,
             transaction.FinancialAccountId,
@@ -298,7 +438,9 @@ public class FinancialTransactionService
             transaction.Description,
             transaction.Merchant,
             transaction.TransactionDateUtc,
-            transaction.CreatedAtUtc
+            transaction.CreatedAtUtc,
+            lines is { Count: > 0 } ? lines : null,
+            attachmentCount
         );
     }
 }

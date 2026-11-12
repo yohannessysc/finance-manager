@@ -515,3 +515,16 @@
     padding: 22px;
   }
 }
+
+.category-item.subcategory {
+  padding-left: 34px;
+
+  .category-icon {
+    transform: scale(.85);
+  }
+}
+
+.parent-label {
+  color: var(--fm-muted);
+  font-size: 12px;
+}

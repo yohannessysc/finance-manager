@@ -152,8 +152,18 @@ public class BankSyncService : IBankSyncService
                 if (!existing.TryGetValue(FingerprintPrefix + txn.TransactionId, out var ft)) continue;
 
                 // Keep the user's category choice; refresh the bank-owned fields.
-                ft.Amount = Math.Round(Math.Abs(txn.Amount), 2);
-                ft.Type = txn.Amount < 0 ? TransactionType.Income : TransactionType.Expense;
+                var amount = Math.Round(Math.Abs(txn.Amount), 2);
+                var type = txn.Amount < 0 ? TransactionType.Income : TransactionType.Expense;
+                if (amount != ft.Amount || type != ft.Type)
+                {
+                    // A split no longer adds up once the bank changes the
+                    // amount, so it is removed and the transaction needs
+                    // categorizing again.
+                    _dbContext.TransactionSplits.RemoveRange(
+                        _dbContext.TransactionSplits.Where(s => s.TransactionId == ft.Id));
+                }
+                ft.Amount = amount;
+                ft.Type = type;
                 ft.TransactionDateUtc = txn.Date;
                 ft.Description = Truncate(txn.MerchantName ?? txn.Name, 250);
                 ft.Merchant = txn.MerchantName is null ? null : Truncate(txn.MerchantName, 200);

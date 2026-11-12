@@ -382,39 +382,60 @@ public sealed class BudgetService : IBudgetService
 
         var earliest = scopePeriods.Min(x => x.StartUtc);
         var latest = scopePeriods.Max(x => x.EndUtc);
-        var activity = await (
-            from transaction in _db.FinancialTransactions.AsNoTracking()
-            join account in _db.FinancialAccounts.AsNoTracking()
-                on transaction.FinancialAccountId equals account.Id
-            where
-                  transaction.Type == TransactionType.Expense &&
-                  transaction.TransactionDateUtc <= nowUtc &&
-                  transaction.TransactionDateUtc >= earliest &&
-                  transaction.TransactionDateUtc < latest &&
-                  (account.HouseholdId.HasValue
-                      ? householdIds.Contains(account.HouseholdId.Value)
-                      : account.UserId == userId && account.HouseholdId == null)
-            select new
-            {
-                account.HouseholdId,
-                account.Currency,
-                transaction.CategoryId,
-                transaction.TransactionDateUtc,
-                transaction.Amount
-            }).ToListAsync(ct);
 
-        return activity
-            .Where(item => scopePeriods.Any(scope =>
-                scope.HouseholdId == item.HouseholdId &&
-                item.TransactionDateUtc >= scope.StartUtc &&
-                item.TransactionDateUtc < scope.EndUtc))
-            .GroupBy(item => (
-                item.HouseholdId,
-                item.CategoryId,
-                item.Currency))
-            .ToDictionary(
-                group => group.Key,
-                group => group.Sum(item => item.Amount));
+        var accounts = await _db.FinancialAccounts
+            .AsNoTracking()
+            .Where(account => account.HouseholdId.HasValue
+                ? householdIds.Contains(account.HouseholdId.Value)
+                : account.UserId == userId)
+            .Select(account => new { account.Id, account.HouseholdId, account.Currency })
+            .ToDictionaryAsync(account => account.Id, ct);
+        var accountIds = accounts.Keys.ToList();
+
+        var lines = await CategoryLineReader.ReadAsync(
+            _db,
+            _db.FinancialTransactions.AsNoTracking().Where(transaction =>
+                transaction.Type == TransactionType.Expense &&
+                transaction.TransactionDateUtc <= nowUtc &&
+                transaction.TransactionDateUtc >= earliest &&
+                transaction.TransactionDateUtc < latest &&
+                accountIds.Contains(transaction.FinancialAccountId)),
+            ct);
+
+        var categories = await CategoryLineReader.ReadCategoriesAsync(
+            _db,
+            lines.Select(line => line.CategoryId),
+            ct);
+
+        var spending = new Dictionary<(Guid? HouseholdId, Guid? CategoryId, string Currency), decimal>();
+        foreach (var line in lines)
+        {
+            var account = accounts[line.AccountId];
+            var inPeriod = scopePeriods.Any(scope =>
+                scope.HouseholdId == account.HouseholdId &&
+                line.DateUtc >= scope.StartUtc &&
+                line.DateUtc < scope.EndUtc);
+            if (!inPeriod)
+                continue;
+
+            Add(line.CategoryId);
+
+            // A parent category's budget also covers its subcategories.
+            if (line.CategoryId is { } categoryId &&
+                categories.TryGetValue(categoryId, out var category) &&
+                category.ParentId is { } parentId)
+            {
+                Add(parentId);
+            }
+
+            void Add(Guid? id)
+            {
+                var key = (account.HouseholdId, id, account.Currency);
+                spending[key] = spending.GetValueOrDefault(key) + line.Amount;
+            }
+        }
+
+        return spending;
     }
 
     private static BudgetResponse ToResponse(

@@ -9,7 +9,7 @@ import {
 import { forkJoin, finalize } from 'rxjs';
 
 import { Accounts } from '../accounts/accounts';
-import { CategoriesService, Category } from '../../core/services/categories.service';
+import { CategoriesService, Category, categoryOptions } from '../../core/services/categories.service';
 import { BudgetsService, Budget, BudgetUpsertRequest } from './budgets.service';
 import {
   Household,
@@ -73,8 +73,10 @@ export class Budgets implements OnInit {
         next: result => {
           this.budgets.set(result.budgets);
           this.households.set(result.households);
+          // Subcategories listed under their parent as "Parent › Child".
           this.expenseCategories.set(
-            result.categories.filter(category => category.type === 2)
+            categoryOptions(result.categories.filter(category => category.type === 2))
+              .map(option => ({ ...option.category, name: option.label }))
           );
           const currencies = [
             ...new Set(result.accounts.map(account => account.currency))

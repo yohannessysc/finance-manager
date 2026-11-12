@@ -29,6 +29,8 @@ import {
   SaveRecurringRequest
 } from './recurring.service';
 
+import { categoryOptions } from '../../core/services/categories.service';
+
 @Component({
   selector: 'app-recurring',
   standalone: true,
@@ -216,7 +218,9 @@ export class Recurring implements OnInit {
 
   availableCategories(): TransactionCategory[] {
     const type = Number(this.form.controls.type.value);
-    return this.categories().filter(c => c.type === type);
+    // Subcategories listed under their parent as "Parent › Child".
+    return categoryOptions(this.categories().filter(c => c.type === type))
+      .map(option => ({ ...option.category, name: option.label }));
   }
 
   availableDestinations(): FinancialAccount[] {

@@ -133,6 +133,54 @@ public class FinancialTransactionsController : ControllerBase
         }
     }
 
+    // POST /api/v1/transactions/bulk-category
+    [HttpPost("bulk-category")]
+    public async Task<IActionResult> SetCategory(
+        [FromBody] BulkCategoryRequest request,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+
+        if (userId is null)
+            return Unauthorized();
+
+        try
+        {
+            return Ok(await _transactionService.SetCategoryAsync(userId.Value, request, ct));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    // PUT /api/v1/transactions/{id}/splits
+    [HttpPut("{id:guid}/splits")]
+    public async Task<IActionResult> SetSplits(
+        Guid id,
+        [FromBody] SetSplitsRequest request,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+
+        if (userId is null)
+            return Unauthorized();
+
+        try
+        {
+            var transaction = await _transactionService.SetSplitsAsync(
+                id, userId.Value, request, ct);
+
+            return transaction is null
+                ? NotFound()
+                : Ok(transaction);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
     // DELETE /api/v1/transactions/{id}
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> DeleteTransaction(

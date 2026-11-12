@@ -90,10 +90,22 @@ public class TransactionCategoryRepository
         if (usedInTransactions)
             return true;
 
+        if (await _context.TransactionSplits.AnyAsync(
+                x => x.CategoryId == categoryId,
+                ct))
+            return true;
+
         return await _context.RecurringTransactions.AnyAsync(
             x => x.CategoryId == categoryId,
             ct);
     }
+
+    public Task<bool> HasSubcategoriesAsync(
+        Guid categoryId,
+        CancellationToken ct = default) =>
+        _context.TransactionCategories.AnyAsync(
+            x => x.ParentCategoryId == categoryId,
+            ct);
 
     public async Task AddAsync(
         TransactionCategory category,

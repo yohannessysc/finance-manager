@@ -54,4 +54,31 @@ describe('TransactionsService CSV import', () => {
       errors: []
     });
   });
+
+  it('uploads an OFX statement with the chosen account', () => {
+    const file = new File(['<OFX></OFX>'], 'statement.qfx');
+
+    service.importOfx(file, 'account-1').subscribe();
+
+    const request = http.expectOne('/api/v1/transactions/import/ofx');
+    expect(request.request.method).toBe('POST');
+    const body = request.request.body as FormData;
+    expect((body.get('file') as File).name).toBe('statement.qfx');
+    expect(body.get('accountId')).toBe('account-1');
+    request.flush({ imported: 1, duplicates: 0, invalidRows: 0, errors: [] });
+  });
+
+  it('saves split lines for a transaction', () => {
+    const lines = [
+      { categoryId: 'a', amount: 70, note: null },
+      { categoryId: 'b', amount: 30, note: 'Soap' }
+    ];
+
+    service.setSplits('t1', lines).subscribe();
+
+    const request = http.expectOne('/api/v1/transactions/t1/splits');
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.body).toEqual({ lines });
+    request.flush({});
+  });
 });

@@ -36,6 +36,14 @@ public class FinanceDbContext
     public DbSet<FinancialTransaction> FinancialTransactions
         => Set<FinancialTransaction>();
 
+    // Category lines of split transactions
+    public DbSet<TransactionSplit> TransactionSplits
+        => Set<TransactionSplit>();
+
+    // Receipts attached to transactions
+    public DbSet<TransactionAttachment> TransactionAttachments
+        => Set<TransactionAttachment>();
+
     // Recurring payment schedules
     public DbSet<RecurringTransaction> RecurringTransactions
         => Set<RecurringTransaction>();
@@ -173,6 +181,11 @@ public class FinanceDbContext
                 x.Type,
                 x.Name
             }).IsUnique();
+
+            entity.HasOne<TransactionCategory>()
+                .WithMany()
+                .HasForeignKey(x => x.ParentCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         // ==========================================
@@ -317,6 +330,45 @@ public class FinanceDbContext
             {
                 x.UserId,
                 x.TransactionDateUtc
+            });
+
+            modelBuilder.Entity<TransactionSplit>(split =>
+            {
+                split.ToTable("TransactionSplits");
+                split.HasKey(x => x.Id);
+                split.Property(x => x.Amount)
+                    .HasPrecision(18, 2)
+                    .IsRequired();
+                split.Property(x => x.Note)
+                    .HasMaxLength(200);
+                split.HasOne<FinancialTransaction>()
+                    .WithMany()
+                    .HasForeignKey(x => x.TransactionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                split.HasOne<TransactionCategory>()
+                    .WithMany()
+                    .HasForeignKey(x => x.CategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                split.HasIndex(x => x.TransactionId);
+            });
+
+            modelBuilder.Entity<TransactionAttachment>(attachment =>
+            {
+                attachment.ToTable("TransactionAttachments");
+                attachment.HasKey(x => x.Id);
+                attachment.Property(x => x.FileName)
+                    .IsRequired()
+                    .HasMaxLength(200);
+                attachment.Property(x => x.ContentType)
+                    .IsRequired()
+                    .HasMaxLength(100);
+                attachment.Property(x => x.Data)
+                    .IsRequired();
+                attachment.HasOne<FinancialTransaction>()
+                    .WithMany()
+                    .HasForeignKey(x => x.TransactionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                attachment.HasIndex(x => x.TransactionId);
             });
 
             modelBuilder.Entity<Household>(entity =>

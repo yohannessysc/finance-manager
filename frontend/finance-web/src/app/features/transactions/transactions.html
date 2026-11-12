@@ -11,6 +11,8 @@
         ↻ Refresh
       </button>
 
+      <button class="btn secondary" type="button" (click)="importing.set(true)">⤒ Import</button>
+
       <button class="btn primary" type="button" (click)="openCreate()">+ Add transaction</button>
     </div>
   </header>
@@ -106,6 +108,31 @@
       </select>
     </div>
 
+    @if (selected().size > 0) {
+      <div class="bulk-bar" role="region" aria-label="Change category of selected transactions">
+        <strong>{{ selected().size }} selected</strong>
+        <select aria-label="Category for selected transactions" [value]="bulkCategoryId()"
+                (change)="bulkCategoryId.set($any($event.target).value)">
+          <option value="">Set category…</option>
+          <option value="none">Uncategorized</option>
+          <optgroup label="Expense categories">
+            @for (option of bulkOptions().expense; track option.id) {
+              <option [value]="option.id">{{ option.label }}</option>
+            }
+          </optgroup>
+          <optgroup label="Income categories">
+            @for (option of bulkOptions().income; track option.id) {
+              <option [value]="option.id">{{ option.label }}</option>
+            }
+          </optgroup>
+        </select>
+        <button type="button" class="btn primary" [disabled]="!bulkCategoryId() || bulkSaving()" (click)="applyBulkCategory()">
+          {{ bulkSaving() ? 'Applying…' : 'Apply' }}
+        </button>
+        <button type="button" class="btn secondary" [disabled]="bulkSaving()" (click)="clearSelection()">Clear</button>
+      </div>
+    }
+
     @if (loading()) {
       <div class="empty-state">Loading transactions...</div>
     } @else if (filteredTransactions().length === 0) {
@@ -120,6 +147,10 @@
         <table>
           <thead>
             <tr>
+              <th class="select-col">
+                <input type="checkbox" aria-label="Select all transactions shown"
+                       [checked]="allSelected()" (change)="toggleAll()" />
+              </th>
               <th>Transaction</th>
               <th>Account</th>
               <th>Category</th>
@@ -131,7 +162,13 @@
 
           <tbody>
             @for (transaction of filteredTransactions(); track transaction.id) {
-              <tr>
+              <tr [class.selected-row]="selected().has(transaction.id)">
+                <td class="select-col">
+                  @if (transaction.type !== types.Transfer) {
+                    <input type="checkbox" [attr.aria-label]="'Select ' + transaction.description"
+                           [checked]="selected().has(transaction.id)" (change)="toggleSelected(transaction.id)" />
+                  }
+                </td>
                 <td>
                   <div class="transaction-cell">
                     <span
@@ -168,7 +205,8 @@
                 </td>
 
                 <td>
-                  <span class="category-pill">
+                  <span class="category-pill" [class.split]="!!transaction.splits?.length"
+                        [attr.title]="transaction.splits?.length ? splitSummary(transaction) : null">
                     {{ categoryName(transaction) }}
                   </span>
                 </td>
@@ -197,6 +235,15 @@
 
                 <td>
                   <div class="row-actions">
+                    @if (transaction.type !== types.Transfer) {
+                      <button type="button" (click)="openSplit(transaction)">Split</button>
+                    }
+
+                    <button type="button" (click)="receiptsFor.set(transaction)"
+                            [attr.aria-label]="'Receipts for ' + transaction.description">
+                      📎{{ transaction.attachmentCount ? ' ' + transaction.attachmentCount : '' }}
+                    </button>
+
                     @if (transaction.recurringTransactionId) {
                       <span class="automatic-pill">Automatic</span>
                     } @else {
@@ -300,6 +347,9 @@
                 </option>
               }
             </select>
+            @if (editingSplit(); as split) {
+              <small>Split across {{ split.splits?.length }} categories. Choosing a category here replaces the split.</small>
+            }
           </div>
 
           <div class="form-field">
@@ -393,4 +443,22 @@
       </div>
     </section>
   </div>
+}
+
+@if (splitting(); as transaction) {
+  <app-split-editor
+    [transaction]="transaction"
+    [categories]="categories()"
+    [currency]="currencyFor(transaction)"
+    (saved)="onSplitSaved($event)"
+    (closed)="splitting.set(null)"
+  />
+}
+
+@if (importing()) {
+  <app-import-dialog [accounts]="accounts()" (closed)="onImportClosed($event)" />
+}
+
+@if (receiptsFor(); as transaction) {
+  <app-receipts-dialog [transaction]="transaction" (closed)="onReceiptsClosed($event)" />
 }

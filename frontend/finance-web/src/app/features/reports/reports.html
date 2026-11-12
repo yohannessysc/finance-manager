@@ -1,0 +1,150 @@
+<section class="reports-page">
+  <header class="page-header">
+    <div>
+      <span class="eyebrow">INSIGHTS</span>
+      <h1>Reports</h1>
+      <p>See where your money comes from and where it goes, month by month.</p>
+    </div>
+
+    <div class="controls">
+      <select aria-label="Report period" [value]="period()" (change)="setPeriod($any($event.target).value)">
+        @for (option of periods; track option.value) {
+          <option [value]="option.value">{{ option.label }}</option>
+        }
+      </select>
+
+      @if ((report()?.currencies?.length ?? 0) > 1) {
+        <select aria-label="Currency" [value]="currency()" (change)="setCurrency($any($event.target).value)">
+          @for (code of report()!.currencies; track code) {
+            <option [value]="code" [selected]="code === currency()">{{ code }}</option>
+          }
+        </select>
+      }
+
+      <button type="button" class="btn secondary" [disabled]="!report() || rows().length === 0" (click)="exportCsv()">
+        ⤓ Export CSV
+      </button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div class="notice error" role="alert">
+      {{ error() }}
+      <button type="button" (click)="load()">Retry</button>
+    </div>
+  }
+
+  @if (loading() && !report()) {
+    <p class="state">Loading report…</p>
+  } @else if (report(); as data) {
+    <div class="summary-grid" [class.refreshing]="loading()">
+      <article class="summary-card">
+        <span>Income</span>
+        <strong>{{ totalIncome() | currency: data.currency : 'symbol' : '1.0-0' }}</strong>
+      </article>
+      <article class="summary-card">
+        <span>Spending</span>
+        <strong>{{ totalExpenses() | currency: data.currency : 'symbol' : '1.0-0' }}</strong>
+      </article>
+      <article class="summary-card">
+        <span>Net</span>
+        <strong [class.negative]="net() < 0">{{ net() | currency: data.currency : 'symbol' : '1.0-0' }}</strong>
+      </article>
+      <article class="summary-card">
+        <span>Average monthly spending</span>
+        <strong>{{ totalExpenses() / (monthCount() || 1) | currency: data.currency : 'symbol' : '1.0-0' }}</strong>
+      </article>
+    </div>
+
+    <article class="panel">
+      <div class="panel-heading">
+        <h2>Income vs spending</h2>
+        <div class="chart-legend">
+          <span><i class="legend-income"></i> Income</span>
+          <span><i class="legend-expense"></i> Spending</span>
+        </div>
+      </div>
+
+      <div class="chart" role="img" aria-label="Monthly income and spending bar chart">
+        @for (month of data.months; track month; let i = $index) {
+          <div class="chart-column">
+            <div class="bars">
+              <div class="bar income" [style.height.%]="barHeight(data.incomeByMonth[i])"
+                   [title]="monthLabel(month, true) + ' income: ' + (data.incomeByMonth[i] | currency: data.currency)"></div>
+              <div class="bar expense" [style.height.%]="barHeight(data.expensesByMonth[i])"
+                   [title]="monthLabel(month, true) + ' spending: ' + (data.expensesByMonth[i] | currency: data.currency)"></div>
+            </div>
+            <span>{{ monthLabel(month) }}</span>
+          </div>
+        }
+      </div>
+    </article>
+
+    <article class="panel">
+      <div class="panel-heading">
+        <h2>By category</h2>
+        <div class="tabs" role="group" aria-label="Report type">
+          <button type="button" [class.selected]="view() === 'expense'" [attr.aria-pressed]="view() === 'expense'"
+                  (click)="view.set('expense')">Spending</button>
+          <button type="button" [class.selected]="view() === 'income'" [attr.aria-pressed]="view() === 'income'"
+                  (click)="view.set('income')">Income</button>
+        </div>
+      </div>
+
+      @if (rows().length === 0) {
+        <p class="state">No {{ view() === 'income' ? 'income' : 'spending' }} recorded in this period.</p>
+      } @else {
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th class="name-col">Category</th>
+                @for (month of data.months; track month) {
+                  <th class="num">{{ monthLabel(month) }}</th>
+                }
+                <th class="num">Total</th>
+                <th class="num">Share</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track row.categoryId) {
+                <tr class="parent-row">
+                  <td class="name-col">
+                    @if (row.children.length > 0) {
+                      <button type="button" class="expand" [attr.aria-expanded]="isExpanded(row)"
+                              [attr.aria-label]="(isExpanded(row) ? 'Collapse ' : 'Expand ') + row.name"
+                              (click)="toggle(row)">{{ isExpanded(row) ? '▾' : '▸' }}</button>
+                    } @else {
+                      <span class="expand-spacer"></span>
+                    }
+                    {{ row.name }}
+                  </td>
+                  @for (amount of row.byMonth; track $index) {
+                    <td class="num">{{ amount === 0 ? '–' : (amount | currency: data.currency : 'symbol' : '1.0-0') }}</td>
+                  }
+                  <td class="num strong">{{ row.total | currency: data.currency : 'symbol' : '1.0-0' }}</td>
+                  <td class="num share">
+                    <span class="share-bar"><span [style.width.%]="share(row.total)"></span></span>
+                    {{ share(row.total) | number: '1.0-0' }}%
+                  </td>
+                </tr>
+                @if (isExpanded(row)) {
+                  @for (child of row.children; track child.categoryId + child.name) {
+                    <tr class="child-row">
+                      <td class="name-col">{{ child.name }}</td>
+                      @for (amount of child.byMonth; track $index) {
+                        <td class="num">{{ amount === 0 ? '–' : (amount | currency: data.currency : 'symbol' : '1.0-0') }}</td>
+                      }
+                      <td class="num">{{ child.total | currency: data.currency : 'symbol' : '1.0-0' }}</td>
+                      <td class="num">{{ share(child.total) | number: '1.0-0' }}%</td>
+                    </tr>
+                  }
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </article>
+  }
+</section>

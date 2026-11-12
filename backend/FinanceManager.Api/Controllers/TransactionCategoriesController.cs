@@ -96,6 +96,23 @@ public class TransactionCategoriesController : ControllerBase
             })
             .ToListAsync(ct);
 
+        // Split lines count as uses of their category.
+        var splitCounts = await (
+            from split in _db.TransactionSplits.AsNoTracking()
+            join transaction in _db.FinancialTransactions.AsNoTracking()
+                on split.TransactionId equals transaction.Id
+            where transaction.UserId == id
+            group split by split.CategoryId into g
+            select new { CategoryId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.CategoryId, x => x.Count, ct);
+
+        var parentIds = await _db.TransactionCategories
+            .AsNoTracking()
+            .Where(x => x.UserId == id && x.ParentCategoryId != null)
+            .Select(x => x.ParentCategoryId!.Value)
+            .Distinct()
+            .ToListAsync(ct);
+
         // Make sure returned IDs are owned by this user.
         var ownedCategories = await _db.TransactionCategories
             .AsNoTracking()
@@ -108,6 +125,7 @@ public class TransactionCategoriesController : ControllerBase
             var transactionCount = transactionCounts
                 .FirstOrDefault(x => x.CategoryId == categoryId)
                 ?.Count ?? 0;
+            transactionCount += splitCounts.GetValueOrDefault(categoryId);
 
             var recurringCount = recurringCounts
                 .FirstOrDefault(x => x.CategoryId == categoryId)
@@ -118,8 +136,10 @@ public class TransactionCategoriesController : ControllerBase
                 categoryId,
                 transactionCount,
                 recurringCount,
+                hasSubcategories = parentIds.Contains(categoryId),
                 inUse = transactionCount > 0 ||
-                        recurringCount > 0
+                        recurringCount > 0 ||
+                        parentIds.Contains(categoryId)
             };
         });
 

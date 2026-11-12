@@ -116,13 +116,16 @@
       } @else {
         <div class="category-list">
           @for (category of filteredCategories(); track category.id) {
-            <div class="category-item">
+            <div class="category-item" [class.subcategory]="!!category.parentCategoryId && !search()">
               <div class="category-icon" aria-hidden="true">
                 {{ iconFor(category) }}
               </div>
 
               <div class="category-info">
                 <strong>{{ category.name }}</strong>
+                @if (category.parentCategoryId) {
+                  <span class="parent-label">Subcategory of {{ parentName(category) }}</span>
+                }
 
                 @if (usageFor(category.id); as usage) {
                   <span>
@@ -134,7 +137,9 @@
                   </span>
 
                   <span>
-                    @if (usage.inUse) {
+                    @if (usage.hasSubcategories) {
+                      🔒 Has subcategories — move or delete them first
+                    } @else if (usage.inUse) {
                       🔒 In use — protected from deletion
                     } @else {
                       ✓ Not in use — can be deleted
@@ -232,6 +237,21 @@
 
           @if (editingId()) {
             <p class="field-note">Category type can't be changed after creation.</p>
+          }
+
+          <label class="form-field">
+            <span>Parent category (optional)</span>
+            <select formControlName="parentCategoryId">
+              <option value="">None — top-level category</option>
+              @for (parent of parentOptions(); track parent.id) {
+                <option [value]="parent.id">{{ parent.name }}</option>
+              }
+            </select>
+          </label>
+          @if (editingHasChildren()) {
+            <p class="field-note">This category has subcategories, so it stays top-level.</p>
+          } @else {
+            <p class="field-note">Make it a subcategory, e.g. Groceries under Food. Budgets and reports for the parent include it.</p>
           }
 
           @if (formError()) {

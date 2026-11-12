@@ -16,6 +16,21 @@ export interface TransactionCategory {
   name: string;
   type: TransactionType;
   createdAtUtc: string;
+  parentCategoryId?: string | null;
+}
+
+export interface Attachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAtUtc: string;
+}
+
+export interface SplitLine {
+  categoryId: string;
+  amount: number;
+  note: string | null;
 }
 
 export interface SaveTransactionRequest {
@@ -81,9 +96,54 @@ export class TransactionsService {
     );
   }
 
+  bulkSetCategory(transactionIds: string[], categoryId: string | null): Observable<{ updated: number; skipped: number }> {
+    return this.http.post<{ updated: number; skipped: number }>(
+      `${this.transactionsUrl}/bulk-category`,
+      { transactionIds, categoryId }
+    );
+  }
+
+  attachmentsUrl(transactionId: string): string {
+    return `${this.transactionsUrl}/${transactionId}/attachments`;
+  }
+
+  listAttachments(transactionId: string): Observable<Attachment[]> {
+    return this.http.get<Attachment[]>(this.attachmentsUrl(transactionId));
+  }
+
+  uploadAttachment(transactionId: string, file: Blob, fileName: string): Observable<Attachment> {
+    const formData = new FormData();
+    formData.append('file', file, fileName);
+    return this.http.post<Attachment>(this.attachmentsUrl(transactionId), formData);
+  }
+
+  deleteAttachment(transactionId: string, attachmentId: string): Observable<void> {
+    return this.http.delete<void>(`${this.attachmentsUrl(transactionId)}/${attachmentId}`);
+  }
+
+  // An empty list removes the split.
+  setSplits(id: string, lines: SplitLine[]): Observable<RecentTransaction> {
+    return this.http.put<RecentTransaction>(
+      `${this.transactionsUrl}/${id}/splits`,
+      { lines }
+    );
+  }
+
   delete(id: string): Observable<void> {
     return this.http.delete<void>(
       `${this.transactionsUrl}/${id}`
+    );
+  }
+
+  // OFX/QFX statements go into one chosen account.
+  importOfx(file: File, accountId: string): Observable<CsvImportResult> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('accountId', accountId);
+
+    return this.http.post<CsvImportResult>(
+      `${this.transactionsUrl}/import/ofx`,
+      formData
     );
   }
 

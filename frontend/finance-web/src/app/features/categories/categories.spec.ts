@@ -237,7 +237,8 @@ describe('Categories', () => {
 
     expect(mockService.create).toHaveBeenCalledWith({
       name: 'Travel',
-      type: 20
+      type: 20,
+      parentCategoryId: null
     });
 
     expect(component.editorOpen()).toBe(false);

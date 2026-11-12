@@ -54,11 +54,19 @@ public class TransactionCategoryService : ITransactionCategoryService
                 "A category with this name already exists for this type.");
         }
 
+        await ValidateParentAsync(
+            userId,
+            request.Type,
+            request.ParentCategoryId,
+            categoryId: null,
+            ct);
+
         var category = new TransactionCategory
         {
             UserId = userId,
             Name = name,
             Type = request.Type,
+            ParentCategoryId = request.ParentCategoryId,
             CreatedAtUtc = DateTime.UtcNow
         };
 
@@ -96,7 +104,15 @@ public class TransactionCategoryService : ITransactionCategoryService
                 "A category with this name already exists for this type.");
         }
 
+        await ValidateParentAsync(
+            userId,
+            category.Type,
+            request.ParentCategoryId,
+            category.Id,
+            ct);
+
         category.Name = name;
+        category.ParentCategoryId = request.ParentCategoryId;
 
         await _repository.SaveChangesAsync(ct);
 
@@ -116,6 +132,12 @@ public class TransactionCategoryService : ITransactionCategoryService
         if (category.UserId != userId)
             return false;
 
+        if (await _repository.HasSubcategoriesAsync(id, ct))
+        {
+            throw new InvalidOperationException(
+                "Move or delete this category's subcategories first.");
+        }
+
         if (await _repository.IsInUseAsync(id, userId, ct))
         {
             throw new InvalidOperationException(
@@ -125,6 +147,35 @@ public class TransactionCategoryService : ITransactionCategoryService
         await _repository.DeleteAsync(category, ct);
 
         return true;
+    }
+
+    private async Task ValidateParentAsync(
+        Guid userId,
+        TransactionType type,
+        Guid? parentId,
+        Guid? categoryId,
+        CancellationToken ct)
+    {
+        if (parentId is null)
+            return;
+
+        if (parentId == categoryId)
+            throw new ArgumentException("A category cannot be its own parent.");
+
+        var parent = await _repository.GetByIdAsync(parentId.Value, userId, ct);
+
+        if (parent is null || parent.UserId != userId)
+            throw new ArgumentException("Choose one of your own categories as the parent.");
+        if (parent.Type != type)
+            throw new ArgumentException("A subcategory must have the same type as its parent.");
+        if (parent.ParentCategoryId is not null)
+            throw new ArgumentException("Subcategories cannot have subcategories of their own.");
+        if (categoryId is not null &&
+            await _repository.HasSubcategoriesAsync(categoryId.Value, ct))
+        {
+            throw new ArgumentException(
+                "A category with subcategories cannot become a subcategory.");
+        }
     }
 
     private static void ValidateName(string? name)
@@ -159,7 +210,8 @@ public class TransactionCategoryService : ITransactionCategoryService
             category.Id,
             category.Name,
             category.Type,
-            category.CreatedAtUtc
+            category.CreatedAtUtc,
+            category.ParentCategoryId
         );
     }
 }

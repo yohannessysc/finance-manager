@@ -34,4 +34,7 @@ public class BankConnectionResponse
 
     /// <summary>Financial account ID this is linked to (if any)</summary>
     public Guid? FinancialAccountId { get; set; }
+
+    /// <summary>When the connection will be removed because the plan no longer includes bank sync</summary>
+    public DateTime? RemovalScheduledAtUtc { get; set; }
 }

@@ -51,6 +51,14 @@ public interface IBankConnectionService
     Task<bool> DisconnectAsync(Guid connectionId, Guid userId);
 
     /// <summary>
+    /// Starts the grace period for connections whose owner no longer has a
+    /// plan with bank sync, and disconnects those whose grace period is over
+    /// (they stop costing Plaid fees). Imported data is kept.
+    /// Returns the number of connections removed.
+    /// </summary>
+    Task<int> RemoveLapsedConnectionsAsync(CancellationToken ct = default);
+
+    /// <summary>
     /// Get all bank transactions for a connection
     /// </summary>
     Task<IEnumerable<BankTransactionResponse>> GetConnectionTransactionsAsync(

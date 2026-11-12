@@ -3,7 +3,7 @@ import { RouterLink } from '@angular/router';
 import { catchError, forkJoin, of } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
-import { BankConnectionService } from '../../bank-connections/services/bank-connection.service';
+import { BillingService, SubscriptionPlan } from '../../../core/billing/billing.service';
 import { BudgetsService } from '../../budgets/budgets.service';
 import { SavingsGoalsService } from '../../savings-goals/savings-goals.service';
 
@@ -13,11 +13,11 @@ interface Step {
   link: string;
   action: string;
   done: boolean;
-  optional?: boolean;
 }
 
-// First-run checklist on the dashboard. Hides itself once the required
-// steps are done, or when dismissed (remembered per user in this browser).
+// First-run guide for a new, empty workspace. It disappears for good once
+// the user has an account and a transaction, or when dismissed
+// (remembered per user in this browser).
 @Component({
   selector: 'app-getting-started',
   standalone: true,
@@ -29,29 +29,35 @@ export class GettingStarted implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly budgets = inject(BudgetsService);
   private readonly goals = inject(SavingsGoalsService);
-  private readonly banks = inject(BankConnectionService);
+  private readonly billing = inject(BillingService);
 
   readonly accountCount = input.required<number>();
   readonly transactionCount = input.required<number>();
 
-  private readonly counts = signal<{ budgets: number; goals: number; banks: number } | null>(null);
+  private readonly counts = signal<{ budgets: number; goals: number; hasBankPlan: boolean } | null>(null);
   readonly dismissed = signal(false);
 
   readonly steps = computed<Step[]>(() => {
     const counts = this.counts();
+    // Bank plan users get their accounts and transactions by connecting a bank.
+    const bank = counts?.hasBankPlan ?? false;
     return [
       {
-        title: 'Add an account',
-        description: 'Chequing, savings or a credit card, with its current balance.',
-        link: '/accounts',
-        action: 'Add account',
+        title: bank ? 'Connect your bank' : 'Add an account',
+        description: bank
+          ? 'Your accounts and balances are imported automatically.'
+          : 'Chequing, savings or a credit card, with its current balance.',
+        link: bank ? '/bank-connections' : '/accounts',
+        action: bank ? 'Connect bank' : 'Add account',
         done: this.accountCount() > 0
       },
       {
-        title: 'Record your transactions',
-        description: 'Add them by hand or import a CSV from your bank.',
+        title: bank ? 'Check your transactions' : 'Record your transactions',
+        description: bank
+          ? 'They sync from your bank. You can also add cash spending by hand.'
+          : 'Add them by hand or import a CSV from your bank.',
         link: '/transactions',
-        action: 'Add transactions',
+        action: bank ? 'View transactions' : 'Add transactions',
         done: this.transactionCount() > 0
       },
       {
@@ -67,24 +73,18 @@ export class GettingStarted implements OnInit {
         link: '/savings-goals',
         action: 'Create goal',
         done: (counts?.goals ?? 0) > 0
-      },
-      {
-        title: 'Connect your bank',
-        description: 'Import transactions automatically (Bank plan).',
-        link: '/bank-connections',
-        action: 'Connect bank',
-        done: (counts?.banks ?? 0) > 0,
-        optional: true
       }
     ];
   });
 
   readonly completed = computed(() => this.steps().filter(step => step.done).length);
 
+  // Only for new users: once there is an account with transactions the
+  // dashboard has real data to show, so the guide gets out of the way.
   readonly visible = computed(() =>
     this.counts() !== null &&
     !this.dismissed() &&
-    this.steps().some(step => !step.done && !step.optional));
+    (this.accountCount() === 0 || this.transactionCount() === 0));
 
   ngOnInit(): void {
     this.dismissed.set(this.readDismissed());
@@ -93,11 +93,11 @@ export class GettingStarted implements OnInit {
     forkJoin({
       budgets: this.budgets.getAll().pipe(catchError(() => of([]))),
       goals: this.goals.getAll().pipe(catchError(() => of([]))),
-      banks: this.banks.getUserConnections().pipe(catchError(() => of([])))
+      plan: this.billing.getStatus().pipe(catchError(() => of(null)))
     }).subscribe(result => this.counts.set({
       budgets: result.budgets.length,
       goals: result.goals.length,
-      banks: result.banks.length
+      hasBankPlan: (result.plan?.plan ?? SubscriptionPlan.Free) >= SubscriptionPlan.Bank
     }));
   }
 

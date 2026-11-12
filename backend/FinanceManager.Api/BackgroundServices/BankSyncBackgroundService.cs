@@ -45,6 +45,12 @@ public sealed class BankSyncBackgroundService : BackgroundService
                     if (lease is null)
                         continue;
 
+                    // Downgraded users' banks are removed at Plaid after a
+                    // grace period so they stop costing Plaid fees.
+                    await scope.ServiceProvider
+                        .GetRequiredService<IBankConnectionService>()
+                        .RemoveLapsedConnectionsAsync(stoppingToken);
+
                     var syncService = scope.ServiceProvider.GetRequiredService<IBankSyncService>();
                     var logs = await syncService.SyncAllConnectionsAsync();
                     var imported = logs.Sum(l => l.TransactionsImported);

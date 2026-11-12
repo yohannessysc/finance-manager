@@ -62,6 +62,10 @@ public class BankConnection
     /// <summary>Soft delete flag</summary>
     public bool IsDeleted { get; set; } = false;
 
+    // When the owner's plan stopped including bank sync. The connection is
+    // removed at Plaid after a grace period; cleared if they upgrade again.
+    public DateTime? PlanLapsedAtUtc { get; set; }
+
     /// <summary>Navigation property: synced bank transactions</summary>
     public virtual ICollection<BankTransaction> BankTransactions { get; set; } = [];
 

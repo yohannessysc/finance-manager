@@ -33,6 +33,7 @@ export interface BankConnectionResponse {
   errorMessage?: string;
   transactionCount: number;
   financialAccountId?: string;
+  removalScheduledAtUtc?: string | null;
 }
 
 export interface BankSyncResponse {

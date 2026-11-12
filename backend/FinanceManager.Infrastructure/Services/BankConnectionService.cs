@@ -18,14 +18,21 @@ public class BankConnectionService : IBankConnectionService
     private readonly IPlaidService _plaidService;
     private readonly ILogger<BankConnectionService> _logger;
     private readonly IBankTokenProtector _tokenProtector;
+    private readonly IEntitlementService _entitlements;
+
+    // How long a downgraded user's banks stay linked (paused) before they
+    // are removed at Plaid. Upgrading again within it resumes syncing.
+    public static readonly TimeSpan LapsedConnectionGracePeriod = TimeSpan.FromDays(30);
 
     public BankConnectionService(
         FinanceDbContext dbContext,
         IPlaidService plaidService,
         IBankTokenProtector tokenProtector,
+        IEntitlementService entitlements,
         ILogger<BankConnectionService> logger)
     {
         _tokenProtector = tokenProtector;
+        _entitlements = entitlements;
         _dbContext = dbContext;
         _plaidService = plaidService;
         _logger = logger;
@@ -221,6 +228,49 @@ public class BankConnectionService : IBankConnectionService
         return true;
     }
 
+    public async Task<int> RemoveLapsedConnectionsAsync(CancellationToken ct = default)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var connections = await _dbContext.BankConnections
+            .Where(bc => !bc.IsDeleted)
+            .ToListAsync(ct);
+
+        var removed = 0;
+        foreach (var group in connections.GroupBy(bc => bc.UserId))
+        {
+            ct.ThrowIfCancellationRequested();
+            var entitled = await _entitlements.GetPlanAsync(group.Key, ct) >= SubscriptionPlan.Bank;
+
+            foreach (var connection in group)
+            {
+                if (entitled)
+                {
+                    connection.PlanLapsedAtUtc = null;
+                }
+                else if (connection.PlanLapsedAtUtc is null)
+                {
+                    connection.PlanLapsedAtUtc = nowUtc;
+                }
+                else if (connection.PlanLapsedAtUtc + LapsedConnectionGracePeriod <= nowUtc)
+                {
+                    await DisconnectAsync(connection.Id, connection.UserId);
+                    removed++;
+                }
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(ct);
+
+        if (removed > 0)
+        {
+            _logger.LogInformation(
+                "Removed {Count} bank connections whose plan no longer includes bank sync.",
+                removed);
+        }
+
+        return removed;
+    }
+
     public async Task<IEnumerable<BankTransactionResponse>> GetConnectionTransactionsAsync(
         Guid connectionId,
         Guid userId,
@@ -303,7 +353,8 @@ public class BankConnectionService : IBankConnectionService
             ExpiresAtUtc = connection.ExpiresAtUtc,
             ErrorMessage = connection.ErrorMessage,
             TransactionCount = transactionCount,
-            FinancialAccountId = connection.FinancialAccountId
+            FinancialAccountId = connection.FinancialAccountId,
+            RemovalScheduledAtUtc = connection.PlanLapsedAtUtc + LapsedConnectionGracePeriod
         };
     }
 

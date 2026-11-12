@@ -69,6 +69,13 @@ public class BankSyncService : IBankSyncService
                 return await FinishAsync(syncLog, "Failed", "Bank connection not found");
             }
 
+            // Every sync path (manual, scheduled, webhook, reconnect) ends
+            // here, so the plan is enforced once for all of them.
+            if (await _entitlements.GetPlanAsync(connection.UserId) < SubscriptionPlan.Bank)
+            {
+                return await FinishAsync(syncLog, "Skipped", "Plan does not include bank sync");
+            }
+
             var accessToken = _tokenProtector.Unprotect(connection.PlaidAccessToken);
             var categories = new CategoryResolver(_dbContext, connection.UserId);
 

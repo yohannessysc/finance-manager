@@ -119,11 +119,6 @@ li {
   }
 }
 
-.optional {
-  color: var(--fm-muted);
-  font-weight: 600;
-}
-
 @media (max-width: 560px) {
   li {
     grid-template-columns: 24px 1fr;

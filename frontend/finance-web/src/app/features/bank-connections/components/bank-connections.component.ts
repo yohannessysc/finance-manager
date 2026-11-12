@@ -51,23 +51,31 @@ import { BillingService, SubscriptionPlan } from '../../../core/billing/billing.
 
           <p *ngIf="connection.errorMessage" class="error-text">{{ connection.errorMessage }}</p>
 
+          <p *ngIf="canLink() === false" class="sync-status">
+            Syncing is paused on the Free plan. Transactions already imported stay in your accounts.
+            <ng-container *ngIf="connection.removalScheduledAtUtc">
+              This bank will be disconnected on {{ connection.removalScheduledAtUtc | date: 'mediumDate' }}
+              unless you upgrade again.
+            </ng-container>
+          </p>
+
           <p *ngIf="syncStatus()[connection.id]" class="sync-status">{{ syncStatus()[connection.id] }}</p>
 
           <footer>
             <button
-              *ngIf="connection.status === 'ExpiredLink'"
+              *ngIf="connection.status === 'ExpiredLink' && canLink() !== false"
               type="button"
               class="primary-button"
               (click)="reconnect(connection)"
-              [disabled]="syncing()[connection.id] || canLink() === false">
+              [disabled]="syncing()[connection.id]">
               Reconnect
             </button>
             <button
-              *ngIf="connection.status !== 'ExpiredLink'"
+              *ngIf="connection.status !== 'ExpiredLink' && canLink() !== false"
               type="button"
               class="outline-button"
               (click)="syncConnection(connection.id)"
-              [disabled]="syncing()[connection.id] || canLink() === false">
+              [disabled]="syncing()[connection.id]">
               {{ syncing()[connection.id] ? 'Syncing...' : 'Sync now' }}
             </button>
             <button type="button" class="text-button danger" (click)="disconnectConnection(connection.id)">

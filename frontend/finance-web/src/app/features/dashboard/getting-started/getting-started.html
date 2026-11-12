@@ -3,7 +3,7 @@
     <header>
       <div>
         <span class="eyebrow">GETTING STARTED</span>
-        <h2 id="getting-started-title">Set up your workspace</h2>
+        <h2 id="getting-started-title">Welcome! Here is how to get started</h2>
         <p>{{ completed() }} of {{ steps().length }} done</p>
       </div>
       <button type="button" class="dismiss" (click)="dismiss()">Hide</button>
@@ -19,7 +19,7 @@
         <li [class.done]="step.done">
           <span class="check" aria-hidden="true">{{ step.done ? '✓' : '' }}</span>
           <div>
-            <strong>{{ step.title }}@if (step.optional) {<span class="optional"> · optional</span>}</strong>
+            <strong>{{ step.title }}</strong>
             <p>{{ step.description }}</p>
           </div>
           @if (!step.done) {

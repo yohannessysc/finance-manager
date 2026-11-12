@@ -80,6 +80,14 @@ Postgres advisory lock so each runs on one instance per tick, and recurring
 posting locks rows. The Data Protection keys are stored in the database, so
 every instance shares them.
 
+## Storage
+
+Receipt photos and PDFs are stored in Postgres (`TransactionAttachments`,
+up to 5 MB each and 10 per transaction; the app shrinks large photos before
+upload). They are included in database backups and deleted with their
+transaction. Watch database storage as usage grows; if it becomes large,
+move the file bytes to object storage (e.g. S3) and keep the metadata.
+
 ## Run the production stack locally
 
 ```sh

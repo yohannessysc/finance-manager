@@ -74,6 +74,22 @@ public sealed class AccountPrivacyController : ControllerBase
             .ThenBy(x => x.CreatedAtUtc)
             .ToListAsync(ct);
 
+        var transactionIds = transactions.Select(x => x.Id).ToList();
+        var splits = (await _db.TransactionSplits
+                .AsNoTracking()
+                .Where(x => transactionIds.Contains(x.TransactionId))
+                .ToListAsync(ct))
+            .ToLookup(x => x.TransactionId);
+
+        // Receipt files are listed (not embedded); each can be downloaded
+        // from its transaction in the app.
+        var attachments = (await _db.TransactionAttachments
+                .AsNoTracking()
+                .Where(x => transactionIds.Contains(x.TransactionId))
+                .Select(x => new { x.Id, x.TransactionId, x.FileName, x.ContentType, x.SizeBytes, x.CreatedAtUtc })
+                .ToListAsync(ct))
+            .ToLookup(x => x.TransactionId);
+
         var recurringTransactions = await _db.RecurringTransactions
             .AsNoTracking()
             .Where(x => x.UserId == userId)
@@ -137,6 +153,7 @@ public sealed class AccountPrivacyController : ControllerBase
                 x.Id,
                 x.Name,
                 x.Type,
+                x.ParentCategoryId,
                 x.CreatedAtUtc
             }),
             transactions = transactions.Select(x => new
@@ -152,7 +169,9 @@ public sealed class AccountPrivacyController : ControllerBase
                 x.Description,
                 x.Merchant,
                 x.TransactionDateUtc,
-                x.CreatedAtUtc
+                x.CreatedAtUtc,
+                splits = splits[x.Id].Select(s => new { s.CategoryId, s.Amount, s.Note }),
+                receipts = attachments[x.Id].Select(a => new { a.Id, a.FileName, a.ContentType, a.SizeBytes, a.CreatedAtUtc })
             }),
             recurringTransactions = recurringTransactions.Select(x => new
             {
@@ -278,6 +297,12 @@ public sealed class AccountPrivacyController : ControllerBase
         await _db.FinancialAccounts
             .Where(x => x.UserId == user.Id)
             .ExecuteDeleteAsync(ct);
+
+        // Detach subcategories first: the parent link is RESTRICT, which
+        // Postgres checks row by row within a single DELETE.
+        await _db.TransactionCategories
+            .Where(x => x.UserId == user.Id && x.ParentCategoryId != null)
+            .ExecuteUpdateAsync(x => x.SetProperty(c => c.ParentCategoryId, (Guid?)null), ct);
 
         await _db.TransactionCategories
             .Where(x => x.UserId == user.Id)

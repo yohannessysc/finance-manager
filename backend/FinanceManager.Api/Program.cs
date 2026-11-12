@@ -425,6 +425,10 @@ builder.Services.AddScoped<
     OfxTransactionImportService>();
 
 builder.Services.AddScoped<
+    ITransactionAttachmentService,
+    TransactionAttachmentService>();
+
+builder.Services.AddScoped<
     ISavingsGoalService,
     SavingsGoalService>();
 

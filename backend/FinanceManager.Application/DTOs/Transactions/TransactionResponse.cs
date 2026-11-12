@@ -16,5 +16,7 @@ public record TransactionResponse(
     DateTime TransactionDateUtc,
     DateTime CreatedAtUtc,
     // Set when the transaction is split across several categories.
-    IReadOnlyList<TransactionSplitResponse>? Splits = null
+    IReadOnlyList<TransactionSplitResponse>? Splits = null,
+    // Number of receipts attached.
+    int AttachmentCount = 0
 );

@@ -54,4 +54,8 @@ public interface IFinancialTransactionRepository
         Guid transactionId,
         IEnumerable<TransactionSplit> splits,
         CancellationToken ct = default);
+
+    Task<Dictionary<Guid, int>> GetAttachmentCountsAsync(
+        IReadOnlyCollection<Guid> transactionIds,
+        CancellationToken ct = default);
 }

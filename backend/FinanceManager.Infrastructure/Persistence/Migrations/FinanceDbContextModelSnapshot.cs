@@ -775,6 +775,45 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.ToTable("SavingsGoalContributions", (string)null);
                 });
 
+            modelBuilder.Entity("FinanceManager.Domain.Entities.TransactionAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("TransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TransactionId");
+
+                    b.ToTable("TransactionAttachments", (string)null);
+                });
+
             modelBuilder.Entity("FinanceManager.Domain.Entities.TransactionCategory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1402,6 +1441,15 @@ namespace FinanceManager.Infrastructure.Persistence.Migrations
                     b.HasOne("FinanceManager.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FinanceManager.Domain.Entities.TransactionAttachment", b =>
+                {
+                    b.HasOne("FinanceManager.Domain.Entities.FinancialTransaction", null)
+                        .WithMany()
+                        .HasForeignKey("TransactionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

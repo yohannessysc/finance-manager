@@ -239,6 +239,11 @@
                       <button type="button" (click)="openSplit(transaction)">Split</button>
                     }
 
+                    <button type="button" (click)="receiptsFor.set(transaction)"
+                            [attr.aria-label]="'Receipts for ' + transaction.description">
+                      📎{{ transaction.attachmentCount ? ' ' + transaction.attachmentCount : '' }}
+                    </button>
+
                     @if (transaction.recurringTransactionId) {
                       <span class="automatic-pill">Automatic</span>
                     } @else {
@@ -452,4 +457,8 @@
 
 @if (importing()) {
   <app-import-dialog [accounts]="accounts()" (closed)="onImportClosed($event)" />
+}
+
+@if (receiptsFor(); as transaction) {
+  <app-receipts-dialog [transaction]="transaction" (closed)="onReceiptsClosed($event)" />
 }

@@ -19,6 +19,14 @@ export interface TransactionCategory {
   parentCategoryId?: string | null;
 }
 
+export interface Attachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAtUtc: string;
+}
+
 export interface SplitLine {
   categoryId: string;
   amount: number;
@@ -93,6 +101,24 @@ export class TransactionsService {
       `${this.transactionsUrl}/bulk-category`,
       { transactionIds, categoryId }
     );
+  }
+
+  attachmentsUrl(transactionId: string): string {
+    return `${this.transactionsUrl}/${transactionId}/attachments`;
+  }
+
+  listAttachments(transactionId: string): Observable<Attachment[]> {
+    return this.http.get<Attachment[]>(this.attachmentsUrl(transactionId));
+  }
+
+  uploadAttachment(transactionId: string, file: Blob, fileName: string): Observable<Attachment> {
+    const formData = new FormData();
+    formData.append('file', file, fileName);
+    return this.http.post<Attachment>(this.attachmentsUrl(transactionId), formData);
+  }
+
+  deleteAttachment(transactionId: string, attachmentId: string): Observable<void> {
+    return this.http.delete<void>(`${this.attachmentsUrl(transactionId)}/${attachmentId}`);
   }
 
   // An empty list removes the split.

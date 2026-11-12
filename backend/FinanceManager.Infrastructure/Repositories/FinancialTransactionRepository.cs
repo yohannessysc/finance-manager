@@ -216,4 +216,14 @@ public class FinancialTransactionRepository
         _context.TransactionSplits.RemoveRange(existing);
         _context.TransactionSplits.AddRange(splits);
     }
+
+    public Task<Dictionary<Guid, int>> GetAttachmentCountsAsync(
+        IReadOnlyCollection<Guid> transactionIds,
+        CancellationToken ct = default) =>
+        _context.TransactionAttachments
+            .AsNoTracking()
+            .Where(x => transactionIds.Contains(x.TransactionId))
+            .GroupBy(x => x.TransactionId)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count, ct);
 }

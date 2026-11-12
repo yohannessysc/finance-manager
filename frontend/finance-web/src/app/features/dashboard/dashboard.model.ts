@@ -42,6 +42,7 @@ export interface RecentTransaction {
   createdAtUtc: string;
   // Present when split across several categories.
   splits?: TransactionSplit[] | null;
+  attachmentCount?: number;
 }
 
 export interface TransactionSplit {

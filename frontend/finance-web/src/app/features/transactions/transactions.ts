@@ -33,6 +33,7 @@ import {
 import { categoryOptions } from '../../core/services/categories.service';
 import { SplitEditor } from './dialogs/split-editor';
 import { ImportDialog } from './dialogs/import-dialog';
+import { ReceiptsDialog } from './dialogs/receipts-dialog';
 
 @Component({
   selector: 'app-transactions',
@@ -42,7 +43,8 @@ import { ImportDialog } from './dialogs/import-dialog';
     DatePipe,
     ReactiveFormsModule,
     SplitEditor,
-    ImportDialog
+    ImportDialog,
+    ReceiptsDialog
   ],
   templateUrl: './transactions.html',
   styleUrl: './transactions.scss'
@@ -74,6 +76,15 @@ export class Transactions implements OnInit {
   readonly transactionToDelete = signal<RecentTransaction | null>(null);
   readonly splitting = signal<RecentTransaction | null>(null);
   readonly importing = signal(false);
+  readonly receiptsFor = signal<RecentTransaction | null>(null);
+
+  onReceiptsClosed(count: number): void {
+    const transaction = this.receiptsFor();
+    this.receiptsFor.set(null);
+    if (!transaction) return;
+    this.transactions.update(items =>
+      items.map(item => (item.id === transaction.id ? { ...item, attachmentCount: count } : item)));
+  }
 
   // Bulk recategorize
   readonly selected = signal<Set<string>>(new Set());

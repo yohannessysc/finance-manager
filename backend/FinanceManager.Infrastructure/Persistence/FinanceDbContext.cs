@@ -40,6 +40,10 @@ public class FinanceDbContext
     public DbSet<TransactionSplit> TransactionSplits
         => Set<TransactionSplit>();
 
+    // Receipts attached to transactions
+    public DbSet<TransactionAttachment> TransactionAttachments
+        => Set<TransactionAttachment>();
+
     // Recurring payment schedules
     public DbSet<RecurringTransaction> RecurringTransactions
         => Set<RecurringTransaction>();
@@ -346,6 +350,25 @@ public class FinanceDbContext
                     .HasForeignKey(x => x.CategoryId)
                     .OnDelete(DeleteBehavior.Restrict);
                 split.HasIndex(x => x.TransactionId);
+            });
+
+            modelBuilder.Entity<TransactionAttachment>(attachment =>
+            {
+                attachment.ToTable("TransactionAttachments");
+                attachment.HasKey(x => x.Id);
+                attachment.Property(x => x.FileName)
+                    .IsRequired()
+                    .HasMaxLength(200);
+                attachment.Property(x => x.ContentType)
+                    .IsRequired()
+                    .HasMaxLength(100);
+                attachment.Property(x => x.Data)
+                    .IsRequired();
+                attachment.HasOne<FinancialTransaction>()
+                    .WithMany()
+                    .HasForeignKey(x => x.TransactionId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                attachment.HasIndex(x => x.TransactionId);
             });
 
             modelBuilder.Entity<Household>(entity =>

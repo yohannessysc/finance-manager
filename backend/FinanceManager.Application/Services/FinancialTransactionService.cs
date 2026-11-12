@@ -23,12 +23,13 @@ public class FinancialTransactionService
     {
         var transactions = await _repository.GetAllAsync(
             userId, ct);
-        var splits = (await _repository.GetSplitsAsync(
-                transactions.Select(x => x.Id).ToList(), ct))
+        var ids = transactions.Select(x => x.Id).ToList();
+        var splits = (await _repository.GetSplitsAsync(ids, ct))
             .ToLookup(x => x.TransactionId);
+        var attachments = await _repository.GetAttachmentCountsAsync(ids, ct);
 
         return transactions
-            .Select(x => MapToResponse(x, splits[x.Id]))
+            .Select(x => MapToResponse(x, splits[x.Id], attachments.GetValueOrDefault(x.Id)))
             .ToList();
     }
 
@@ -44,7 +45,8 @@ public class FinancialTransactionService
             return null;
 
         var splits = await _repository.GetSplitsAsync([transaction.Id], ct);
-        return MapToResponse(transaction, splits);
+        var attachments = await _repository.GetAttachmentCountsAsync([transaction.Id], ct);
+        return MapToResponse(transaction, splits, attachments.GetValueOrDefault(transaction.Id));
     }
 
     public async Task<TransactionResponse> CreateAsync(
@@ -151,7 +153,8 @@ public class FinancialTransactionService
 
         await _repository.SaveChangesAsync(ct);
 
-        return MapToResponse(transaction, splits);
+        var attachmentCounts = await _repository.GetAttachmentCountsAsync([transaction.Id], ct);
+        return MapToResponse(transaction, splits, attachmentCounts.GetValueOrDefault(transaction.Id));
     }
 
     public async Task<TransactionResponse?> SetSplitsAsync(
@@ -212,7 +215,8 @@ public class FinancialTransactionService
         await _repository.ReplaceSplitsAsync(transaction.Id, splits, ct);
         await _repository.SaveChangesAsync(ct);
 
-        return MapToResponse(transaction, splits);
+        var attachmentCounts = await _repository.GetAttachmentCountsAsync([transaction.Id], ct);
+        return MapToResponse(transaction, splits, attachmentCounts.GetValueOrDefault(transaction.Id));
     }
 
     public async Task<BulkCategoryResponse> SetCategoryAsync(
@@ -416,7 +420,8 @@ public class FinancialTransactionService
 
     private static TransactionResponse MapToResponse(
         FinancialTransaction transaction,
-        IEnumerable<TransactionSplit>? splits = null)
+        IEnumerable<TransactionSplit>? splits = null,
+        int attachmentCount = 0)
     {
         var lines = splits?
             .Select(x => new TransactionSplitResponse(x.Id, x.CategoryId, x.Amount, x.Note))
@@ -434,7 +439,8 @@ public class FinancialTransactionService
             transaction.Merchant,
             transaction.TransactionDateUtc,
             transaction.CreatedAtUtc,
-            lines is { Count: > 0 } ? lines : null
+            lines is { Count: > 0 } ? lines : null,
+            attachmentCount
         );
     }
 }

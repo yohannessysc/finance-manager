@@ -38,6 +38,15 @@ internal sealed class ApiSession
         return await Client.SendAsync(request);
     }
 
+    public async Task<HttpResponseMessage> PostFileAsync(string url, string fileName, byte[] content)
+    {
+        var csrf = await Client.GetFromJsonAsync<JsonElement>("/api/v1/security/csrf");
+        using var form = new MultipartFormDataContent { { new ByteArrayContent(content), "file", fileName } };
+        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = form };
+        request.Headers.Add("X-XSRF-TOKEN", csrf.GetProperty("token").GetString());
+        return await Client.SendAsync(request);
+    }
+
     public Task<HttpResponseMessage> PostAsync(string url, object? body = null) =>
         SendAsync(HttpMethod.Post, url, body ?? new { });
 

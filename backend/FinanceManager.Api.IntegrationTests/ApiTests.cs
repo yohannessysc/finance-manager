@@ -8,8 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace FinanceManager.Api.IntegrationTests;
 
-// Critical paths against the real pipeline and Postgres. Registration is
-// rate limited to 5 per hour per client, so keep sign-ups below that.
+// Critical paths against the real pipeline and Postgres.
 [Collection(ApiCollection.Name)]
 public sealed class ApiTests(ApiFactory factory)
 {

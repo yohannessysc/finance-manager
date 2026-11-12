@@ -79,6 +79,49 @@
         <span></span>
       </div>
 
+      @if (twoFactorStep()) {
+      <h1>Two-step verification</h1>
+
+      <p class="auth-subtitle">
+        {{ useRecoveryCode()
+          ? 'Enter one of the recovery codes you saved when you turned on two-step verification.'
+          : 'Enter the 6-digit code from your authenticator app.' }}
+      </p>
+
+      <form [formGroup]="codeForm" (ngSubmit)="submitCode()" novalidate>
+        <div class="field">
+          <label for="code">{{ useRecoveryCode() ? 'Recovery code' : 'Authentication code' }}</label>
+
+          <input
+            id="code"
+            type="text"
+            [attr.inputmode]="useRecoveryCode() ? 'text' : 'numeric'"
+            autocomplete="one-time-code"
+            formControlName="code"
+            [placeholder]="useRecoveryCode() ? 'XXXXX-XXXXX' : '123456'"
+            autofocus
+          />
+        </div>
+
+        @if (error()) {
+          <div class="form-alert" role="alert">
+            <span aria-hidden="true">!</span>
+            {{ error() }}
+          </div>
+        }
+
+        <button type="submit" class="submit-button" [disabled]="submitting()">
+          <span>{{ submitting() ? 'Verifying...' : 'Verify and sign in' }}</span>
+        </button>
+      </form>
+
+      <div class="two-factor-links">
+        <button type="button" class="forgot-link" (click)="toggleRecoveryCode()">
+          {{ useRecoveryCode() ? 'Use an authenticator code instead' : 'Lost your device? Use a recovery code' }}
+        </button>
+        <button type="button" class="forgot-link" (click)="backToPassword()">Back</button>
+      </div>
+      } @else {
       <h1>Sign in to your account</h1>
 
       <p class="auth-subtitle">Your financial workspace is waiting for you.</p>
@@ -182,6 +225,8 @@
           }
         </button>
       </form>
+
+      }
 
       <!-- REGISTRATION LINK -->
       <div class="auth-divider">

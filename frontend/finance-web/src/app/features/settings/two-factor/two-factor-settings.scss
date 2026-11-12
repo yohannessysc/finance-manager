@@ -1,0 +1,151 @@
+// Mirrors the Settings page styles (component styles are scoped).
+:host {
+  display: block;
+}
+
+.subheading {
+  margin: 18px 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  strong {
+    font-size: 13px;
+  }
+
+  p {
+    margin: 4px 0 0;
+    max-width: 420px;
+    color: var(--fm-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.status-row .actions {
+  margin-top: 0;
+}
+
+.primary-button,
+.secondary-button {
+  min-height: 40px;
+  padding: 10px 15px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
+}
+
+.primary-button {
+  border: 0;
+  background: var(--fm-primary);
+  color: #fff;
+}
+
+.secondary-button {
+  border: 1px solid var(--fm-border);
+  background: transparent;
+  color: var(--fm-text);
+
+  &.danger {
+    color: #c94e56;
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+
+  span {
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  input {
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 13px;
+    border: 1px solid var(--fm-border);
+    border-radius: 10px;
+    background: var(--fm-background);
+    color: var(--fm-text);
+    font: inherit;
+    font-size: 13px;
+  }
+}
+
+.setup-steps {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.qr-code {
+  display: block;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.help {
+  color: var(--fm-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.shared-key {
+  overflow-wrap: anywhere;
+  color: var(--fm-text);
+  font-weight: 700;
+}
+
+.recovery-codes {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--fm-primary);
+  border-radius: 12px;
+  background: var(--fm-primary-soft);
+
+  p {
+    margin: 6px 0 10px;
+    font-size: 12px;
+  }
+
+  ol {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 6px 16px;
+    margin: 0;
+    padding-left: 20px;
+    font-size: 13px;
+  }
+}
+
+.error {
+  margin: 12px 0 0;
+  color: #c94e56;
+  font-size: 12px;
+}

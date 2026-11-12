@@ -41,3 +41,26 @@
     filter: brightness(0.97);
   }
 }
+
+.two-factor-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+
+  button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--fm-primary);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}

@@ -20,6 +20,10 @@ import {
 
 import { CsrfService } from './csrf.service';
 
+export type LoginOutcome =
+  | { status: 'signedIn'; user: AuthUser }
+  | { status: 'twoFactorRequired' };
+
 @Injectable({
   providedIn: 'root'
 })
@@ -49,20 +53,42 @@ export class AuthService {
   // ---------------------------------------
   login(
     request: LoginRequest
-  ): Observable<AuthUser> {
-    return this.http.post<AuthUser>(
+  ): Observable<LoginOutcome> {
+    return this.http.post<AuthUser | { requiresTwoFactor: true }>(
       `${this.apiUrl}/login`,
       request
     ).pipe(
-      tap(user => {
-        this.currentUser.set(user);
-        this.csrfService.clearToken();
-      }),
-      switchMap(user =>
-        this.csrfService.refreshToken().pipe(
-          map(() => user)
-        )
+      switchMap(response =>
+        'requiresTwoFactor' in response
+          ? of<LoginOutcome>({ status: 'twoFactorRequired' })
+          : this.completeSignIn(response).pipe(
+              map(user => ({ status: 'signedIn', user }) as LoginOutcome)
+            )
       )
+    );
+  }
+
+  // Second sign-in step when two-factor authentication is on: a code
+  // from the authenticator app, or a one-time recovery code.
+  loginTwoFactor(
+    code: string,
+    isRecoveryCode: boolean
+  ): Observable<AuthUser> {
+    return this.http.post<AuthUser>(
+      `${this.apiUrl}/login/two-factor`,
+      { code, isRecoveryCode }
+    ).pipe(
+      switchMap(user => this.completeSignIn(user))
+    );
+  }
+
+  // The antiforgery token is tied to the signed-in user, so replace it.
+  private completeSignIn(user: AuthUser): Observable<AuthUser> {
+    this.currentUser.set(user);
+    this.csrfService.clearToken();
+
+    return this.csrfService.refreshToken().pipe(
+      map(() => user)
     );
   }
 

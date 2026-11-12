@@ -6,9 +6,21 @@ namespace FinanceManager.Api.IntegrationTests;
 
 // Drives the API the way the Angular app does: cookie auth plus a fresh
 // CSRF token on every state-changing request.
-internal sealed class ApiSession(HttpClient client)
+internal sealed class ApiSession
 {
-    public HttpClient Client { get; } = client;
+    private static int _nextClientId;
+
+    public ApiSession(HttpClient client)
+    {
+        Client = client;
+
+        // Each session looks like a different user's IP (as the proxy would
+        // report it), so the per-IP auth rate limits don't couple tests.
+        var id = Interlocked.Increment(ref _nextClientId);
+        Client.DefaultRequestHeaders.Add("X-Forwarded-For", $"203.0.113.{id}");
+    }
+
+    public HttpClient Client { get; }
 
     public Task<HttpResponseMessage> GetAsync(string url) => Client.GetAsync(url);
 

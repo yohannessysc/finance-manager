@@ -16,6 +16,7 @@ using FinanceManager.Infrastructure.Security;
 using FinanceManager.Infrastructure.Services;
 
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -236,6 +237,22 @@ builder.Services.ConfigureApplicationCookie(options =>
         return Task.CompletedTask;
     };
 });
+
+// The short-lived cookie that carries a user between the password step
+// and the two-factor code step of sign-in.
+builder.Services.Configure<CookieAuthenticationOptions>(
+    IdentityConstants.TwoFactorUserIdScheme,
+    options =>
+    {
+        options.Cookie.Name = "FinanceManager.TwoFactor";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.SecurePolicy =
+            builder.Environment.IsDevelopment()
+                ? CookieSecurePolicy.SameAsRequest
+                : CookieSecurePolicy.Always;
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+    });
 
 // ---------------------------------------
 // 6. Security Stamp Validation

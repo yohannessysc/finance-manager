@@ -88,6 +88,13 @@ export class TransactionsService {
     );
   }
 
+  bulkSetCategory(transactionIds: string[], categoryId: string | null): Observable<{ updated: number; skipped: number }> {
+    return this.http.post<{ updated: number; skipped: number }>(
+      `${this.transactionsUrl}/bulk-category`,
+      { transactionIds, categoryId }
+    );
+  }
+
   // An empty list removes the split.
   setSplits(id: string, lines: SplitLine[]): Observable<RecentTransaction> {
     return this.http.put<RecentTransaction>(

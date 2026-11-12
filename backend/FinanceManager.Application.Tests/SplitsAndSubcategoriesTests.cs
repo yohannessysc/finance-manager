@@ -187,3 +187,89 @@ public sealed class SplitsAndSubcategoriesTests : IDisposable
         await Assert.ThrowsAsync<ArgumentException>(() => CategoryAsync("Bonus", salary));
     }
 }
+
+public sealed class BulkCategoryTests : IDisposable
+{
+    private readonly SqliteConnection _connection;
+    private readonly FinanceDbContext _db;
+    private readonly FinancialTransactionService _transactions;
+    private readonly TransactionCategoryService _categories;
+    private readonly Guid _userId = Guid.NewGuid();
+    private readonly Guid _accountId = Guid.NewGuid();
+    private readonly Guid _otherAccountId = Guid.NewGuid();
+
+    public BulkCategoryTests()
+    {
+        _connection = new SqliteConnection("DataSource=:memory:");
+        _connection.Open();
+        _db = new FinanceDbContext(new DbContextOptionsBuilder<FinanceDbContext>()
+            .UseSqlite(_connection).Options);
+        _db.Database.EnsureCreated();
+
+        _db.Users.Add(new ApplicationUser
+        {
+            Id = _userId,
+            UserName = "bulk@example.com",
+            Email = "bulk@example.com",
+            SecurityStamp = Guid.NewGuid().ToString()
+        });
+        _db.FinancialAccounts.AddRange(
+            new FinancialAccount { Id = _accountId, UserId = _userId, Name = "Chequing", Currency = "CAD" },
+            new FinancialAccount { Id = _otherAccountId, UserId = _userId, Name = "Savings", Currency = "CAD" });
+        _db.SaveChanges();
+
+        _transactions = new FinancialTransactionService(new FinancialTransactionRepository(_db));
+        _categories = new TransactionCategoryService(new TransactionCategoryRepository(_db));
+    }
+
+    public void Dispose()
+    {
+        _db.Dispose();
+        _connection.Dispose();
+    }
+
+    private async Task<Guid> AddAsync(TransactionType type, Guid? destination = null) =>
+        (await _transactions.CreateAsync(_userId, new CreateTransactionRequest(
+            _accountId, destination, null, type, 10m, "x", null, DateTime.UtcNow.AddMinutes(-1)))).Id;
+
+    [Fact]
+    public async Task SetsTheCategoryOnMatchingTransactionsAndSkipsTheRest()
+    {
+        var dining = (await _categories.CreateAsync(
+            _userId, new CreateCategoryRequest("Dining", TransactionType.Expense))).Id;
+        var groceries = (await _categories.CreateAsync(
+            _userId, new CreateCategoryRequest("Groceries", TransactionType.Expense))).Id;
+
+        var lunch = await AddAsync(TransactionType.Expense);
+        var dinner = await AddAsync(TransactionType.Expense);
+        var pay = await AddAsync(TransactionType.Income);
+        var transfer = await AddAsync(TransactionType.Transfer, _otherAccountId);
+
+        // A split expense gets the single category instead.
+        await _transactions.UpdateAsync(dinner, _userId, new UpdateTransactionRequest(
+            _accountId, null, groceries, TransactionType.Expense, 10m, "x", null, DateTime.UtcNow.AddMinutes(-1)));
+        await _transactions.SetSplitsAsync(dinner, _userId, new SetSplitsRequest(
+            [new(groceries, 4m, null), new(dining, 6m, null)]));
+
+        var result = await _transactions.SetCategoryAsync(
+            _userId,
+            new BulkCategoryRequest([lunch, dinner, pay, transfer, Guid.NewGuid()], dining));
+
+        Assert.Equal(2, result.Updated);
+        Assert.Equal(3, result.Skipped);
+        Assert.Equal(dining, (await _transactions.GetByIdAsync(lunch, _userId))!.CategoryId);
+        var updatedDinner = await _transactions.GetByIdAsync(dinner, _userId);
+        Assert.Equal(dining, updatedDinner!.CategoryId);
+        Assert.Null(updatedDinner.Splits);
+        Assert.Null((await _transactions.GetByIdAsync(pay, _userId))!.CategoryId);
+    }
+
+    [Fact]
+    public async Task RejectsACategoryTheUserCannotUse()
+    {
+        var id = await AddAsync(TransactionType.Expense);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => _transactions.SetCategoryAsync(
+            _userId, new BulkCategoryRequest([id], Guid.NewGuid())));
+    }
+}

@@ -75,6 +75,71 @@ export class Transactions implements OnInit {
   readonly splitting = signal<RecentTransaction | null>(null);
   readonly importing = signal(false);
 
+  // Bulk recategorize
+  readonly selected = signal<Set<string>>(new Set());
+  readonly bulkCategoryId = signal('');
+  readonly bulkSaving = signal(false);
+
+  readonly selectableIds = computed(() =>
+    this.filteredTransactions()
+      .filter(transaction => transaction.type !== TransactionType.Transfer)
+      .map(transaction => transaction.id));
+
+  readonly allSelected = computed(() => {
+    const ids = this.selectableIds();
+    const selected = this.selected();
+    return ids.length > 0 && ids.every(id => selected.has(id));
+  });
+
+  readonly bulkOptions = computed(() => ({
+    expense: categoryOptions(this.categories().filter(c => c.type === TransactionType.Expense)),
+    income: categoryOptions(this.categories().filter(c => c.type === TransactionType.Income))
+  }));
+
+  toggleSelected(id: string): void {
+    this.selected.update(set => {
+      const next = new Set(set);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  toggleAll(): void {
+    this.selected.set(this.allSelected() ? new Set() : new Set(this.selectableIds()));
+  }
+
+  clearSelection(): void {
+    this.selected.set(new Set());
+    this.bulkCategoryId.set('');
+  }
+
+  applyBulkCategory(): void {
+    const ids = [...this.selected()];
+    const value = this.bulkCategoryId();
+    if (ids.length === 0 || !value || this.bulkSaving()) return;
+
+    this.bulkSaving.set(true);
+    this.error.set('');
+    this.successMessage.set('');
+
+    this.service.bulkSetCategory(ids, value === 'none' ? null : value)
+      .pipe(finalize(() => this.bulkSaving.set(false)))
+      .subscribe({
+        next: result => {
+          const skipped = result.skipped > 0
+            ? ` ${result.skipped} skipped (transfers or a different type than the category).`
+            : '';
+          this.successMessage.set(`Updated ${result.updated} transactions.${skipped}`);
+          this.clearSelection();
+          this.loadData();
+        },
+        error: err => {
+          this.error.set(err?.error?.message ?? 'Could not update the selected transactions.');
+        }
+      });
+  }
+
   onImportClosed(importedAny: boolean): void {
     this.importing.set(false);
     if (importedAny) {

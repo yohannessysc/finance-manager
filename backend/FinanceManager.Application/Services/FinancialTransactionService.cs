@@ -215,6 +215,48 @@ public class FinancialTransactionService
         return MapToResponse(transaction, splits);
     }
 
+    public async Task<BulkCategoryResponse> SetCategoryAsync(
+        Guid userId,
+        BulkCategoryRequest request,
+        CancellationToken ct = default)
+    {
+        var ids = (request.TransactionIds ?? []).Distinct().ToList();
+        if (ids.Count == 0)
+            throw new ArgumentException("Select at least one transaction.");
+        if (ids.Count > MaximumBulkTransactions)
+            throw new ArgumentException($"You can change at most {MaximumBulkTransactions} transactions at once.");
+
+        TransactionCategory? category = null;
+        if (request.CategoryId is { } categoryId)
+        {
+            category = await _repository.GetCategoryAsync(categoryId, userId, ct)
+                ?? throw new ArgumentException("Choose one of your categories.");
+        }
+
+        var updated = 0;
+        var skipped = 0;
+        foreach (var id in ids)
+        {
+            var transaction = await _repository.GetByIdAsync(id, userId, ct);
+            if (transaction is null ||
+                transaction.Type == TransactionType.Transfer ||
+                (category is not null && category.Type != transaction.Type) ||
+                !await _repository.CanEditTransactionAsync(id, userId, ct))
+            {
+                skipped++;
+                continue;
+            }
+
+            // A single category replaces any split, as in the edit form.
+            await _repository.ReplaceSplitsAsync(transaction.Id, [], ct);
+            transaction.CategoryId = category?.Id;
+            updated++;
+        }
+
+        await _repository.SaveChangesAsync(ct);
+        return new BulkCategoryResponse(updated, skipped);
+    }
+
     public async Task<bool> DeleteAsync(
         Guid id,
         Guid userId,
@@ -370,6 +412,7 @@ public class FinancialTransactionService
     }
 
     private const int MaximumSplitLines = 20;
+    private const int MaximumBulkTransactions = 500;
 
     private static TransactionResponse MapToResponse(
         FinancialTransaction transaction,

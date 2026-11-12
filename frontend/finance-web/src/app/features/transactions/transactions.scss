@@ -470,3 +470,39 @@ tbody tr:hover {
     padding: 20px;
   }
 }
+
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 27px 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--fm-primary) 10%, var(--fm-surface));
+
+  select {
+    padding: 9px 10px;
+    border: 1px solid var(--fm-border);
+    border-radius: 10px;
+    background: var(--fm-surface);
+    color: var(--fm-text);
+    font: inherit;
+    font-size: 13px;
+  }
+}
+
+.select-col {
+  width: 36px;
+  padding-right: 0;
+}
+
+tr.selected-row td {
+  background: color-mix(in srgb, var(--fm-primary) 6%, transparent);
+}
+
+@media (max-width: 650px) {
+  .bulk-bar {
+    margin: 0 17px 14px;
+  }
+}

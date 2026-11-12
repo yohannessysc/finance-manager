@@ -108,6 +108,31 @@
       </select>
     </div>
 
+    @if (selected().size > 0) {
+      <div class="bulk-bar" role="region" aria-label="Change category of selected transactions">
+        <strong>{{ selected().size }} selected</strong>
+        <select aria-label="Category for selected transactions" [value]="bulkCategoryId()"
+                (change)="bulkCategoryId.set($any($event.target).value)">
+          <option value="">Set category…</option>
+          <option value="none">Uncategorized</option>
+          <optgroup label="Expense categories">
+            @for (option of bulkOptions().expense; track option.id) {
+              <option [value]="option.id">{{ option.label }}</option>
+            }
+          </optgroup>
+          <optgroup label="Income categories">
+            @for (option of bulkOptions().income; track option.id) {
+              <option [value]="option.id">{{ option.label }}</option>
+            }
+          </optgroup>
+        </select>
+        <button type="button" class="btn primary" [disabled]="!bulkCategoryId() || bulkSaving()" (click)="applyBulkCategory()">
+          {{ bulkSaving() ? 'Applying…' : 'Apply' }}
+        </button>
+        <button type="button" class="btn secondary" [disabled]="bulkSaving()" (click)="clearSelection()">Clear</button>
+      </div>
+    }
+
     @if (loading()) {
       <div class="empty-state">Loading transactions...</div>
     } @else if (filteredTransactions().length === 0) {
@@ -122,6 +147,10 @@
         <table>
           <thead>
             <tr>
+              <th class="select-col">
+                <input type="checkbox" aria-label="Select all transactions shown"
+                       [checked]="allSelected()" (change)="toggleAll()" />
+              </th>
               <th>Transaction</th>
               <th>Account</th>
               <th>Category</th>
@@ -133,7 +162,13 @@
 
           <tbody>
             @for (transaction of filteredTransactions(); track transaction.id) {
-              <tr>
+              <tr [class.selected-row]="selected().has(transaction.id)">
+                <td class="select-col">
+                  @if (transaction.type !== types.Transfer) {
+                    <input type="checkbox" [attr.aria-label]="'Select ' + transaction.description"
+                           [checked]="selected().has(transaction.id)" (change)="toggleSelected(transaction.id)" />
+                  }
+                </td>
                 <td>
                   <div class="transaction-cell">
                     <span

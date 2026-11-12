@@ -37,4 +37,9 @@ public interface IFinancialTransactionService
         Guid userId,
         SetSplitsRequest request,
         CancellationToken ct = default);
+
+    Task<BulkCategoryResponse> SetCategoryAsync(
+        Guid userId,
+        BulkCategoryRequest request,
+        CancellationToken ct = default);
 }

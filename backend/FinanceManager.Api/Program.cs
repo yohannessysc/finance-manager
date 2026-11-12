@@ -17,11 +17,45 @@ using FinanceManager.Infrastructure.Services;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ---------------------------------------
+// 0. Logging and error tracking
+// ---------------------------------------
+// Production logs are single-line JSON so a log platform can index them.
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Logging.ClearProviders();
+    builder.Logging.AddJsonConsole(options =>
+    {
+        options.IncludeScopes = true;
+        options.UseUtcTimestamp = true;
+        options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+    });
+}
+
+// Sentry stays disabled until Sentry:Dsn is set. Personal data is never
+// sent: this is a finance app, so no request bodies, cookies or user IPs.
+builder.WebHost.UseSentry(options =>
+{
+    options.Dsn = builder.Configuration["Sentry:Dsn"] ?? "";
+    options.Environment = builder.Environment.EnvironmentName;
+    options.SendDefaultPii = false;
+    options.MaxRequestBodySize = Sentry.Extensibility.RequestSize.None;
+    options.TracesSampleRate =
+        builder.Configuration.GetValue<double?>("Sentry:TracesSampleRate") ?? 0;
+});
+
+builder.Services.AddProblemDetails();
+
+builder.Services
+    .AddHealthChecks()
+    .AddDbContextCheck<FinanceDbContext>("database", tags: ["ready"]);
 
 // ---------------------------------------
 // 1. Controllers and API documentation
@@ -437,6 +471,9 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
+    // Unhandled errors become a ProblemDetails JSON response carrying a
+    // traceId (to match logs and Sentry) instead of an empty 500.
+    app.UseExceptionHandler();
     app.UseHsts();
 }
 
@@ -464,5 +501,14 @@ app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Liveness: the process is up. Readiness: it can also reach the
+// database, so a load balancer only routes traffic to working instances.
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false })
+    .AllowAnonymous();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready")
+}).AllowAnonymous();
 
 app.Run();

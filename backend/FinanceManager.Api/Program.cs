@@ -18,6 +18,7 @@ using FinanceManager.Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -52,6 +53,20 @@ builder.WebHost.UseSentry(options =>
 });
 
 builder.Services.AddProblemDetails();
+
+// Behind the reverse proxy the client IP and scheme arrive in
+// X-Forwarded-* headers. Without this, every user shares the proxy's IP
+// for login rate limiting. The API must only be reachable through the
+// proxy, otherwise clients could spoof these headers.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit =
+        builder.Configuration.GetValue<int?>("ForwardedHeaders:ForwardLimit") ?? 1;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 builder.Services
     .AddHealthChecks()
@@ -460,6 +475,8 @@ builder.Services.AddAuthorization();
 // ---------------------------------------
 var app = builder.Build();
 
+app.UseForwardedHeaders();
+
 await BankTokenEncryptionBackfill.RunAsync(app.Services);
 
 // ---------------------------------------
@@ -477,7 +494,8 @@ else
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// No UseHttpsRedirection: TLS terminates at the reverse proxy or load
+// balancer, which owns the HTTP -> HTTPS redirect. HSTS still applies.
 
 // The API only ever returns JSON, so it can deny everything a browser
 // might otherwise do with a response.
